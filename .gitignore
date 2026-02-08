@@ -59,3 +59,32 @@ certificates/
 # Test coverage
 .coverage
 htmlcov/
+
+# Testing & Validation Files
+test_*.py
+*_test.py
+test_*.txt
+test_*.md
+*_TEST_*.md
+*_RESULT*.md
+test_*.json
+diagnose*.py
+diagnose*.log
+diagnose*.txt
+run_test*.ps1
+run_test*.bat
+quick_test.py
+minimal_*_test.py
+
+# Test Results & Outputs
+*_output.txt
+*_result*.txt
+*_report.json
+api_output.md
+ocr_*.txt
+ocr_*.md
+ocr_*.json
+output.txt
+
+# Cleanup Reports (optional, uncomment if needed)
+# CLEANUP_REPORT.md

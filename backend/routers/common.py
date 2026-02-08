@@ -5,7 +5,7 @@ import os
 import uuid
 import aiofiles
 from database import get_db
-from schemas import TeacherResponse, UploadResponse
+from schemas import TeacherResponse, UploadResponse, ResponseModel
 from utils import success_response, error_response
 from models import SysTeacher
 from dependencies import get_current_user
@@ -14,14 +14,13 @@ from config import settings
 router = APIRouter(prefix="/api/v1/common", tags=["Common"])
 
 
-@router.get("/teachers", response_model=List[TeacherResponse])
+@router.get("/teachers", response_model=ResponseModel)
 async def get_teachers(
-    db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    db: Session = Depends(get_db)
 ):
     """
     Get list of teachers for dropdown selection
-    - Available to all authenticated users
+    - Publicly accessible to avoid auth issues during form filling
     """
     teachers = db.query(SysTeacher).all()
     

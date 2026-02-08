@@ -61,12 +61,13 @@ class CertificateRecognitionServiceOpenAI:
 2. 对于相似字要特别注意区分（如：华/华、锋/峰、涛/滔等）
 3. 如果某个字不确定，请在该人名后标注"(?)"
 4. 请多次检查人名是否识别正确
+5. **特别注意团队奖项**：如果是团队获奖，"recipient_name"应设为null，必须在"team_members"中列出所有成员。
 
 【需要提取的信息】
 
 **基本信息：**
 1. 证书名称/奖项名称
-2. 主要获奖者姓名（如果是个人）
+2. 主要获奖者姓名（如果是个人奖项）
 3. 颁发单位/组织
 4. 获奖时间/颁发日期（格式：YYYY-MM-DD，如果只有年月，日期用01）
 5. 证书编号（如果有）
@@ -79,9 +80,10 @@ class CertificateRecognitionServiceOpenAI:
 **人员信息（最重要，请仔细识别）：**
 9. 团队成员名单：
    - 请按证书上的顺序列出所有成员
+   - 包含主要负责人在内的所有名字
    - 每个人名请仔细辨认，确保准确
-   - 注意区分形近字
-   - 如果有不确定的字，标注"(?)"
+   - 如果证书上列出了多个名字，请全部识别并在team_members中返回
+   - 如果是团队奖但只写了"团队"二字而无具体名单，请尝试在证书其他位置寻找名单
 
 10. 指导老师/指导教师：
    - 可能标注为"指导老师"、"指导教师"、"导师"等
@@ -96,7 +98,7 @@ class CertificateRecognitionServiceOpenAI:
 
 {
     "certificate_name": "证书/奖项名称",
-    "recipient_name": "主要获奖者姓名，团队奖项填null",
+    "recipient_name": "主要获奖者姓名，如果是多人团队奖项且无单一获奖人，请填null",
     "issuing_organization": "颁发单位",
     "issue_date": "YYYY-MM-DD",
     "certificate_number": "证书编号或null",
@@ -218,13 +220,30 @@ class CertificateRecognitionServiceOpenAI:
         data = result.get("data", {})
         
         # Validate required fields
-        required_fields = ["certificate_name", "recipient_name", "issuing_organization"]
-        missing_fields = [field for field in required_fields if not data.get(field)]
-        
-        if missing_fields:
+        # Validate required fields
+        # recipient_name is not strictly required if team_members are present (for team awards)
+        if not data.get("certificate_name"):
             return {
                 "success": False,
-                "error": f"Missing required fields: {', '.join(missing_fields)}",
+                "error": "Missing required field: certificate_name",
+                "data": data
+            }
+            
+        if not data.get("issuing_organization"):
+            return {
+                "success": False,
+                "error": "Missing required field: issuing_organization",
+                "data": data
+            }
+            
+        # Check if we have at least one form of recipient identification
+        has_recipient = bool(data.get("recipient_name"))
+        has_team = bool(data.get("team_members") and len(data.get("team_members")) > 0)
+        
+        if not has_recipient and not has_team:
+            return {
+                "success": False,
+                "error": "Missing recipient info: Valid certificate must have either 'recipient_name' or 'team_members'",
                 "data": data
             }
         

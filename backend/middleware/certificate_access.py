@@ -10,7 +10,7 @@ from pathlib import Path
 import re
 
 from config import settings
-from auth import decode_token
+from auth import decode_access_token
 from database import SessionLocal
 from models import SysUser, UserRole
 
@@ -49,7 +49,7 @@ class CertificateAccessMiddleware(BaseHTTPMiddleware):
             
             # Decode token and verify access
             try:
-                payload = decode_token(token)
+                payload = decode_access_token(token)
                 username = payload.get("sub")
                 
                 if not username:

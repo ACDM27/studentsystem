@@ -1,7 +1,8 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 from typing import Optional, Any, Dict, List
 from datetime import datetime
 from models import UserRole, AchievementStatus, MessageRole
+import re
 
 
 # ============= Response Models =============
@@ -14,22 +15,66 @@ class ResponseModel(BaseModel):
 
 # ============= Auth Models =============
 class LoginRequest(BaseModel):
-    username: str
-    password: str
+    """Login request with strict validation"""
+    username: str = Field(
+        ...,
+        min_length=3,
+        max_length=50,
+        description="Username must be 3-50 characters"
+    )
+    password: str = Field(
+        ...,
+        min_length=6,
+        max_length=128,
+        description="Password must be 6-128 characters"
+    )
+    
+    @field_validator('username')
+    @classmethod
+    def validate_username(cls, v: str) -> str:
+        """Validate username format - alphanumeric, underscore, hyphen only"""
+        v = v.strip()
+        if not re.match(r'^[a-zA-Z0-9_-]+$', v):
+            raise ValueError('Username can only contain letters, numbers, underscore and hyphen')
+        return v
+    
+    @field_validator('password')
+    @classmethod
+    def validate_password(cls, v: str) -> str:
+        """Validate password - remove leading/trailing whitespace"""
+        # Remove leading/trailing whitespace but preserve internal spaces
+        v = v.strip()
+        if len(v) < 6:
+            raise ValueError('Password must be at least 6 characters after trimming')
+        return v
 
 
 class UserInfo(BaseModel):
+    """User information response"""
     id: int
     name: str
     role: UserRole
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class LoginResponse(BaseModel):
-    token: str
+    """Login response with dual tokens"""
+    access_token: str = Field(..., description="Short-lived access token for API requests")
+    refresh_token: str = Field(..., description="Long-lived refresh token for renewing access")
+    token_type: str = Field(default="bearer", description="Token type")
     userInfo: UserInfo
+
+
+class RefreshTokenRequest(BaseModel):
+    """Refresh token request"""
+    refresh_token: str = Field(..., description="Refresh token to exchange for new access token")
+
+
+class TokenResponse(BaseModel):
+    """Token refresh response"""
+    access_token: str = Field(..., description="New access token")
+    token_type: str = Field(default="bearer", description="Token type")
 
 
 # ============= Teacher Models =============
@@ -106,6 +151,10 @@ class CertificateRecognitionData(BaseModel):
     recognition_time: Optional[str] = None
     model_used: Optional[str] = None
     confidence: Optional[str] = None
+
+    model_config = {
+        "protected_namespaces": ()
+    }
 
 
 class CertificateRecognitionResponse(BaseModel):

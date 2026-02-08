@@ -1,0 +1,70 @@
+
+version: '3.8'
+
+services:
+  # 数据库服务
+  db:
+    image: mysql:8.0
+    container_name: student_system_db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: password  # 请在生产环境中修改此密码
+      MYSQL_DATABASE: student_system
+    ports:
+      - "3306:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+    networks:
+      - app-network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  # 后端服务
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: student_system_backend
+    restart: always
+    depends_on:
+      - db
+    ports:
+      - "8092:8000"  # 映射到宿主机的 8092 端口
+    environment:
+      # 连接到 'db' 服务，密码与上面 MYSQL_ROOT_PASSWORD 一致
+      - DATABASE_URL=mysql+pymysql://root:password@db:3306/student_system
+      # 允许的前端源 (包括容器内部网络和宿主机访问)
+      - ALLOWED_ORIGINS=*
+      # 其他配置
+      - SECRET_KEY=your-production-secret-key-change-it
+      - UPLOAD_DIR=/app/uploads
+      # 这里可以添加您的 AI API Key
+      # - QWEN_API_KEY=your_key_here
+    volumes:
+      - uploads_data:/app/uploads
+    networks:
+      - app-network
+
+  # 前端服务
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: student_system_frontend
+    restart: always
+    depends_on:
+      - backend
+    ports:
+      - "8091:80"   # 映射到宿主机的 8091 端口
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  db_data:
+  uploads_data:

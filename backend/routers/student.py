@@ -61,7 +61,8 @@ async def ocr_recognize(
                     "date": data.get("issue_date"),
                     "issuer": data.get("issuing_organization"),
                     "suggested_type": data.get("category"),
-                    "award_level": data.get("award_level"),
+                    "award_level": data.get("award_level"),  # 奖项级别（国家级、省部级等）
+                    "award": data.get("award"),  # 具体奖项（一等奖、二等奖等）
                     "certificate_number": data.get("certificate_number"),
                     "recipient_name": data.get("recipient_name"),
                     
@@ -191,6 +192,59 @@ async def get_my_achievements(
         })
     
     return success_response(data=achievement_list)
+
+
+@router.get("/achievements/{achievement_id}")
+async def get_achievement_detail(
+    achievement_id: int,
+    student: SysStudent = Depends(require_student),
+    db: Session = Depends(get_db)
+):
+    """
+    Get achievement detail by ID
+    - Returns detailed information of a specific achievement
+    - Verifies the achievement belongs to the current student
+    - Includes teacher information
+    """
+    # Query achievement and verify ownership
+    achievement = db.query(BizAchievement).filter(
+        BizAchievement.id == achievement_id,
+        BizAchievement.student_id == student.id
+    ).first()
+    
+    if not achievement:
+        return error_response(msg="Achievement not found", code=404)
+    
+    # Build detailed response
+    achievement_detail = {
+        "id": achievement.id,
+        "title": achievement.title,
+        "type": achievement.type,
+        "type_id": achievement.type,  # For compatibility
+        "description": achievement.content_json.get("description", "") if achievement.content_json else "",
+        "content_json": achievement.content_json,
+        "evidence_url": achievement.evidence_url,
+        "status": achievement.status.value if hasattr(achievement.status, 'value') else achievement.status,
+        "audit_comment": achievement.audit_comment,
+        "created_at": achievement.created_at.isoformat(),
+        "awardedAt": achievement.content_json.get("date", achievement.created_at.isoformat()) if achievement.content_json else achievement.created_at.isoformat(),
+        "year": achievement.content_json.get("year", "") if achievement.content_json else "",
+        "level": achievement.content_json.get("award_level", "") if achievement.content_json else "",
+    }
+    
+    # Add teacher information if exists
+    if achievement.teacher:
+        achievement_detail["teacher"] = {
+            "id": achievement.teacher.id,
+            "name": achievement.teacher.name,
+            "contactEmail": getattr(achievement.teacher, 'email', ''),
+            "contactPhone": getattr(achievement.teacher, 'phone', ''),
+            "research_tent": getattr(achievement.teacher, 'research_direction', '')
+        }
+    else:
+        achievement_detail["teacher"] = None
+    
+    return success_response(data=achievement_detail)
 
 
 @router.get("/certificates")
@@ -355,3 +409,90 @@ async def ai_chat(
         "session_id": session_id,
         "message": ai_response
     })
+
+
+@router.get("/me")
+async def get_student_me(
+    student: SysStudent = Depends(require_student),
+    db: Session = Depends(get_db)
+):
+    """
+    获取当前登录学生的基本信息
+    """
+    user = student.user
+    
+    return success_response(data={
+        "id": student.id,
+        "student_id": student.student_number,  # Corrected from student_id to student_number
+        "name": student.name,
+        "class_name": getattr(student, 'class_name', None),  # Handle potential missing field if model updated
+        "major": student.major,
+        "email": getattr(student, 'email', None),
+        "phone": getattr(student, 'phone', None),
+        "user_id": user.id,
+        "username": user.username,
+        "avatar_url": user.avatar_url,
+        "role": user.role.value
+    })
+
+
+@router.get("/profile")
+async def get_student_profile(
+    student: SysStudent = Depends(require_student),
+    db: Session = Depends(get_db)
+):
+    """
+    获取学生的详细档案信息
+    包含基本信息、成果统计、证书统计等
+    """
+    user = student.user
+    
+    # 统计成果数量
+    total_achievements = db.query(BizAchievement).filter(
+        BizAchievement.student_id == student.id
+    ).count()
+    
+    approved_achievements = db.query(BizAchievement).filter(
+        BizAchievement.student_id == student.id,
+        BizAchievement.status == AchievementStatus.APPROVED
+    ).count()
+    
+    pending_achievements = db.query(BizAchievement).filter(
+        BizAchievement.student_id == student.id,
+        BizAchievement.status == AchievementStatus.PENDING
+    ).count()
+    
+    # 获取最近的成果
+    recent_achievements = db.query(BizAchievement).filter(
+        BizAchievement.student_id == student.id
+    ).order_by(BizAchievement.created_at.desc()).limit(5).all()
+    
+    return success_response(data={
+        "basic_info": {
+            "id": student.id,
+            "student_id": student.student_number,  # Corrected from student_id to student_number
+            "name": student.name,
+            "class_name": getattr(student, "class_name", None),
+            "major": student.major,
+            "email": getattr(student, "email", None),
+            "phone": getattr(student, "phone", None),
+            "avatar_url": user.avatar_url
+        },
+        "statistics": {
+            "total_achievements": total_achievements,
+            "approved_achievements": approved_achievements,
+            "pending_achievements": pending_achievements,
+            "approval_rate": round(approved_achievements / total_achievements * 100, 2) if total_achievements > 0 else 0
+        },
+        "recent_achievements": [
+            {
+                "id": ach.id,
+                "title": ach.title,
+                "type": ach.type,
+                "status": ach.status.value,
+                "created_at": ach.created_at.isoformat()
+            }
+            for ach in recent_achievements
+        ]
+    })
+

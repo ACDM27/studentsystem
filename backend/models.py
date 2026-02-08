@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, Enum, ForeignKey, JSON
+﻿from sqlalchemy import Column, Integer, String, Text, DateTime, Enum, ForeignKey, JSON
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import enum
@@ -80,6 +80,7 @@ class BizAchievement(Base):
     type = Column(String(50), nullable=False)  # 字典值
     content_json = Column(JSON)  # OCR识别后的结构化详情
     evidence_url = Column(String(500))  # 证书图片地址
+    feishu_attachment_token = Column(String(200), default=None)  # 飞书附件临时token
     status = Column(Enum(AchievementStatus), default=AchievementStatus.PENDING, index=True)
     audit_comment = Column(Text)  # 审核意见
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
@@ -115,3 +116,54 @@ class AiChatMessage(Base):
     
     # Relationships
     session = relationship("AiChatSession", back_populates="messages")
+
+
+class FeishuConfig(Base):
+    """Feishu application configuration table"""
+    __tablename__ = "feishu_configs"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    app_id = Column(String(100), nullable=False)
+    app_secret = Column(String(500), nullable=False)  # 加密存储
+    status = Column(String(20), default="active", index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    field_mappings = relationship("FeishuFieldMapping", back_populates="config", cascade="all, delete-orphan")
+
+
+class FeishuFieldMapping(Base):
+    """Feishu field mapping configuration table"""
+    __tablename__ = "feishu_field_mappings"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    config_id = Column(Integer, ForeignKey("feishu_configs.id"), nullable=False, index=True)
+    name = Column(String(100), nullable=False)
+    feishu_field_name = Column(String(100), nullable=False)
+    db_field_name = Column(String(50), nullable=False)
+    transform_rule = Column(JSON)
+    is_required = Column(Integer, default=0)
+    display_order = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    config = relationship("FeishuConfig", back_populates="field_mappings")
+
+
+class FeishuImportLog(Base):
+    """Feishu import history log table"""
+    __tablename__ = "feishu_import_logs"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    operator_id = Column(Integer, nullable=False, index=True)
+    operator_role = Column(String(20), nullable=False)
+    app_token = Column(String(100))
+    table_id = Column(String(100))
+    table_name = Column(String(200))
+    total_records = Column(Integer, default=0)
+    success_count = Column(Integer, default=0)
+    failed_count = Column(Integer, default=0)
+    error_details = Column(JSON)
+    import_duration_seconds = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)

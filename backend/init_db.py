@@ -22,14 +22,32 @@ def seed_database():
             print("Database already contains data. Skipping seed.")
             return
         
-        # Create admin user
+        # Create admin user (系统管理员)
         admin_user = SysUser(
-            username="admin",
+            username="sysadmin",
             password_hash=get_password_hash("admin123"),
             role=UserRole.ADMIN,
             avatar_url=None
         )
         db.add(admin_user)
+        
+        # Create test student: admin/admin (便于测试)
+        test_user = SysUser(
+            username="admin",
+            password_hash=get_password_hash("admin"),
+            role=UserRole.STUDENT,
+            avatar_url=None
+        )
+        db.add(test_user)
+        db.flush()  # Get user ID
+        
+        test_student = SysStudent(
+            user_id=test_user.id,
+            student_number="TEST001",
+            name="测试学生",
+            major="计算机科学与技术"
+        )
+        db.add(test_student)
         
         # Create teachers
         teachers = [
@@ -55,8 +73,7 @@ def seed_database():
             user_id=student_user1.id,
             student_number="2021001",
             name="张三",
-            major="计算机科学与技术",
-            persona_cache=None
+            major="计算机科学与技术"
         )
         db.add(student1)
         
@@ -74,17 +91,28 @@ def seed_database():
             user_id=student_user2.id,
             student_number="2021002",
             name="李四",
-            major="软件工程",
-            persona_cache=None
+            major="软件工程"
         )
         db.add(student2)
         
         db.commit()
         print("Database seeded successfully!")
-        print("\nTest Accounts:")
-        print("Admin: username=admin, password=admin123")
-        print("Student 1: username=student001, password=password123 (张三)")
-        print("Student 2: username=student002, password=password123 (李四)")
+        print("\n" + "="*60)
+        print("测试账号信息：")
+        print("="*60)
+        print("🎓 学生测试账号（推荐使用）:")
+        print("   用户名: admin")
+        print("   密码:   admin")
+        print("   姓名:   测试学生")
+        print()
+        print("🔧 系统管理员账号:")
+        print("   用户名: sysadmin")
+        print("   密码:   admin123")
+        print()
+        print("👨‍🎓 其他学生账号:")
+        print("   用户名: student001  密码: password123  (张三)")
+        print("   用户名: student002  密码: password123  (李四)")
+        print("="*60)
         
     except Exception as e:
         print(f"Error seeding database: {e}")
