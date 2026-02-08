@@ -3,7 +3,7 @@
 """
 import sys
 from database import SessionLocal
-from models import SysUser, Student, UserRole
+from models import SysUser, SysStudent, UserRole
 from auth import get_password_hash
 
 def create_student001():
@@ -23,16 +23,16 @@ def create_student001():
             print(f"   角色: {existing_user.role.value}")
             
             # 检查学生信息
-            student = db.query(Student).filter(Student.user_id == existing_user.id).first()
+            student = db.query(SysStudent).filter(SysStudent.user_id == existing_user.id).first()
             if student:
-                print(f"   学生信息: {student.name} (学号: {student.student_id})")
+                print(f"   学生信息: {student.name} (学号: {student.student_number})")
             else:
                 print("   ⚠️  缺少学生信息，正在创建...")
-                student = Student(
+                student = SysStudent(
                     user_id=existing_user.id,
-                    student_id="2021001",
+                    student_number="2021001",
                     name="张三",
-                    class_name="计算机1班"
+                    major="计算机科学与技术"
                 )
                 db.add(student)
                 db.commit()
@@ -62,11 +62,13 @@ def create_student001():
         
         # 3. 创建学生信息
         print("\n[3] 创建学生信息...")
-        student = Student(
+        # 注意: 这里的 SysStudent 已经在 imports 中被重命名为了 SysStudent
+        student = SysStudent(
             user_id=user.id,
-            student_id="2021001",
+            student_number="2021001",
             name="张三",
-            class_name="计算机1班"
+            major="计算机科学与技术"
+            # class_name="计算机1班" (SysStudent 模型中没有 class_name 字段, 改用 major)
         )
         db.add(student)
         db.commit()
