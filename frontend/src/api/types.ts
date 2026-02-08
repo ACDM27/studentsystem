@@ -161,7 +161,10 @@ export interface AuditAchievementRequest {
 
 export interface ChatRequest {
     session_id?: string | null
-    message: string
+    message?: string
+    question?: string // 兼容旧代码
+    student_id?: string
+    context?: string
 }
 
 export interface ChatResponse {

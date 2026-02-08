@@ -145,6 +145,30 @@ export function getStudentPersona(): Promise<StudentPersonaResponse> {
 }
 
 /**
+ * 获取学生画像（根据学号）
+ * GET /api/v1/student/portrait/{student_id}
+ */
+export function fetchStudentPortraitByStudentId(student_id: string): Promise<any> {
+    return request.get(`/api/v1/student/portrait/${student_id}`)
+}
+
+/**
+ * 创建学生画像
+ * POST /api/v1/student/portrait
+ */
+export function createStudentPortrait(data: any): Promise<any> {
+    return request.post('/api/v1/student/portrait', data)
+}
+
+/**
+ * 添加问答历史
+ * POST /api/v1/student/portrait/{id}/qa
+ */
+export function addQaHistory(portraitId: string, data: any): Promise<any> {
+    return request.post(`/api/v1/student/portrait/${portraitId}/qa`, data)
+}
+
+/**
  * 查询学生信息（结合AI和学生档案）
  * 这是一个组合函数，先获取学生信息，然后进行AI查询
  */
@@ -357,6 +381,9 @@ export default {
     getMyCertificates,
     chatWithAI,
     getStudentPersona,
+    fetchStudentPortraitByStudentId,
+    createStudentPortrait,
+    addQaHistory,
     queryStudentInfo,
     // 管理员
     getAchievementsForReview,

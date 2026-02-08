@@ -172,8 +172,8 @@ import {
   createStudentPortrait,
   addQaHistory,
   chatWithAI,
-  fetchStudentMe
-} from '../../../server/api/api'
+  getStudentMe as fetchStudentMe
+} from '@/api'
 
 // 消息接口定义
 interface ChatMessage {
@@ -402,15 +402,16 @@ const generateAIResponse = async (user_message: string): Promise<string> => {
     
     // 情况2: response 是对象，检查是否是错误响应
     if (response && typeof response === 'object') {
+      const anyResponse = response as any
       // 检查错误标志
-      if ('error' in response && response.error) {
+      if ('error' in anyResponse && anyResponse.error) {
         console.warn('AI返回错误响应:', response)
-        const errorMsg = response.response || response.message || '抱歉，AI助手服务暂时不可用。'
+        const errorMsg = anyResponse.response || anyResponse.message || '抱歉，AI助手服务暂时不可用。'
         return typeof errorMsg === 'string' ? errorMsg : '抱歉，AI助手服务暂时不可用。'
       }
       
       // 尝试从多个可能的字段提取AI响应
-      const aiResponse = response.response || response.message || response.answer || response.reply || response.data
+      const aiResponse = anyResponse.response || anyResponse.message || anyResponse.answer || anyResponse.reply || anyResponse.data
       
       if (aiResponse && typeof aiResponse === 'string') {
         console.log('成功提取AI响应:', aiResponse)
