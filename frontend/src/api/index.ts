@@ -22,6 +22,7 @@ import type {
     StudentPersonaResponse,
     CertificatesResponse
 } from './types'
+import type { IGetAssignmentsResp } from '@/types/api'
 
 // ==================== 认证相关 ====================
 
@@ -331,6 +332,14 @@ export function getCourseById(id: number): Promise<any> {
     return request.get(`/api/v1/courses/${id}`)
 }
 
+/**
+ * 获取作业列表
+ * GET /api/v1/assignments
+ */
+export function getAssignments(): Promise<IGetAssignmentsResp> {
+    return request.get('/api/v1/assignments')
+}
+
 // 默认导出所有API函数（更新版）
 export default {
     // 认证
@@ -367,6 +376,8 @@ export default {
 
     getCourses,
     getCourseById,
+    // 作业
+    getAssignments,
     // 工具
     getFileUrl,
     formatDate

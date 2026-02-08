@@ -128,7 +128,7 @@
   <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { IconBulb, IconBell, IconSearch, IconFileDownload, IconHistory } from '@tabler/icons-vue'
-import { getAssignments } from '../../../apis'
+import { getAssignments } from '../../../api'
 import type { IGetAssignmentsResp } from '../../../types/api'
 import { NInputGroup, useMessage } from 'naive-ui'
 import AssignmentDetail from './assignment-detail.vue'
