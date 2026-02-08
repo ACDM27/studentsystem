@@ -12,7 +12,9 @@ ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED 1
 
 # 安装系统级依赖 (如编译某些 Python 包所需的 gcc)
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# 使用国内镜像源加速 apt-get Update and Install
+RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources && \
+    apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     python3-dev \
     default-libmysqlclient-dev \
