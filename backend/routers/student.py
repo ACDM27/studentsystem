@@ -29,28 +29,34 @@ async def ocr_recognize(
     Certificate recognition with permanent storage (Step 1 of 2)
     - Accepts certificate image
     - Saves file permanently to student's directory
-    - Calls AI vision model for extraction
+    - Calls AI vision model (qwen-vl-max) for extraction
     - Returns structured data + file URL
     - User can then confirm and submit achievement in Step 2
     """
     from services.file_manager import file_manager
-    from services.certificate_recognition import certificate_recognition_service
+    from services.certificate_recognition_openai import certificate_recognition_service_openai
     
     try:
         # Step 1: Save certificate permanently
         file_info = await file_manager.save_certificate_permanent(file, student.id)
         
-        # Step 2: Recognize certificate using AI
-        recognition_result = await certificate_recognition_service.recognize_certificate(
+        # Step 2: Recognize certificate using AI (OpenAI-compatible API)
+        recognition_result = certificate_recognition_service_openai.recognize_certificate(
             file_info["file_path"]
         )
         
-        # Step 3: Validate and return result
-        if recognition_result.get("success"):
-            data = recognition_result.get("data", {})
+        # Step 3: Validate result
+        validated_result = certificate_recognition_service_openai.validate_recognition_result(
+            recognition_result
+        )
+        
+        # Step 4: Return result
+        if validated_result.get("success"):
+            data = validated_result.get("data", {})
             
             return success_response(data={
                 "recognized_data": {
+                    # Basic fields
                     "title": data.get("certificate_name"),
                     "date": data.get("issue_date"),
                     "issuer": data.get("issuing_organization"),
@@ -58,7 +64,15 @@ async def ocr_recognize(
                     "award_level": data.get("award_level"),
                     "certificate_number": data.get("certificate_number"),
                     "recipient_name": data.get("recipient_name"),
+                    
+                    # New enhanced fields
+                    "project_name": data.get("project_name"),
+                    "team_members": data.get("team_members", []),
+                    "advisors": data.get("advisors", []),
                     "additional_info": data.get("additional_info"),
+                    
+                    # Confidence scores
+                    "recognition_confidence": data.get("recognition_confidence", {})
                 },
                 "file_url": file_info["file_url"],
                 "file_info": {
@@ -70,12 +84,13 @@ async def ocr_recognize(
                     "model_used": data.get("model_used"),
                     "recognition_time": data.get("recognition_time"),
                     "confidence": data.get("confidence")
-                }
+                },
+                "usage": validated_result.get("usage", {})
             })
         else:
             # Recognition failed, but file is still saved
             return error_response(
-                msg=f"Certificate saved but recognition failed: {recognition_result.get('error')}",
+                msg=f"Certificate saved but recognition failed: {validated_result.get('error')}",
                 code=500,
                 data={
                     "file_url": file_info["file_url"],

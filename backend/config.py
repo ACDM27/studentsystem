@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings
-from typing import List
+from pydantic import field_validator
+from typing import List, Union
 
 
 class Settings(BaseSettings):
@@ -22,13 +23,23 @@ class Settings(BaseSettings):
     LLM_API_URL: str = ""
     OCR_API_URL: str = ""
     
-    # Alibaba Cloud Qwen (Certificate Recognition)
+    # Alibaba Cloud Qwen (OpenAI Compatible Mode)
+    DASHSCOPE_API_KEY: str = ""
     QWEN_API_KEY: str = ""
     QWEN_MODEL_NAME: str = "qwen-plus"
-    QWEN_API_URL: str = "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
+    QWEN_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    QWEN_VL_MODEL: str = "qwen-vl-max"  # Using MAX model for better accuracy
     
     # CORS
-    ALLOWED_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:8080"]
+    ALLOWED_ORIGINS: Union[List[str], str] = ["http://localhost:3000", "http://localhost:8080"]
+    
+    @field_validator('ALLOWED_ORIGINS', mode='before')
+    @classmethod
+    def parse_allowed_origins(cls, v):
+        """Parse ALLOWED_ORIGINS from comma-separated string or list"""
+        if isinstance(v, str):
+            return [origin.strip() for origin in v.split(',')]
+        return v
     
     class Config:
         env_file = ".env"
