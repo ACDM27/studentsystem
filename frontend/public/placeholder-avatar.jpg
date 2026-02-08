@@ -1,0 +1,7 @@
+<!-- 这是一个SVG格式的占位头像 -->
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
+  <circle cx="100" cy="100" r="100" fill="#f0f0f0"/>
+  <circle cx="100" cy="85" r="40" fill="#c0c0c0"/>
+  <path d="M100 135 C60 135 40 165 40 200 L160 200 C160 165 140 135 100 135 Z" fill="#c0c0c0"/>
+  <text x="100" y="180" font-family="Arial" font-size="14" text-anchor="middle" fill="#808080">暂无头像</text>
+</svg>
