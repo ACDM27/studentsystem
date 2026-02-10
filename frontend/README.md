@@ -328,7 +328,8 @@ pnpm install
 
 # 配置环境变量
 cp .env.example .env
-# 编辑.env文件，配置API地址等
+# 编辑.env文件，配置API地址
+# 注意：生产环境建议设置 VITE_API_BASE_URL=/ 以使用相对路径解决跨域问题
 
 # 开发环境启动
 pnpm run dev
