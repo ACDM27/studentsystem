@@ -165,8 +165,12 @@ async def get_my_achievements(
     Get my achievements
     - Returns only current student's achievements
     - Optional filter by status
+    - Excludes soft-deleted achievements by default
     """
-    query = db.query(BizAchievement).filter(BizAchievement.student_id == student.id)
+    query = db.query(BizAchievement).filter(
+        BizAchievement.student_id == student.id,
+        BizAchievement.is_deleted == False  # 排除已删除的成果
+    )
     
     if status:
         try:
@@ -247,6 +251,33 @@ async def get_achievement_detail(
     return success_response(data=achievement_detail)
 
 
+@router.delete("/achievements/{achievement_id}")
+async def delete_achievement(
+    achievement_id: int,
+    student: SysStudent = Depends(require_student),
+    db: Session = Depends(get_db)
+):
+    """
+    Delete achievement (soft delete)
+    - Verifies the achievement belongs to the current student
+    - Marks achievement as deleted instead of hard deleting
+    """
+    # Query achievement and verify ownership
+    achievement = db.query(BizAchievement).filter(
+        BizAchievement.id == achievement_id,
+        BizAchievement.student_id == student.id
+    ).first()
+    
+    if not achievement:
+        return error_response(msg="Achievement not found", code=404)
+    
+    # Soft delete: mark as deleted
+    achievement.is_deleted = True
+    db.commit()
+    
+    return success_response(msg="Achievement deleted successfully")
+
+
 @router.get("/certificates")
 async def get_my_certificates(
     student: SysStudent = Depends(require_student)
@@ -317,7 +348,10 @@ async def ai_chat(
     - Backend manages conversation history
     - Implements RAG with student achievements
     - Stores messages in database
+    - Uses real LLM API (Alibaba Cloud Qwen)
     """
+    from services.ai_chat_service import ai_chat_service
+    
     # Get or create session
     session_id = chat_req.session_id
     
@@ -350,46 +384,94 @@ async def ai_chat(
     db.add(user_message)
     db.commit()
     
-    # Retrieve chat history (last 10 messages)
-    history = db.query(AiChatMessage).filter(
+    # Retrieve chat history (last 10 messages for context)
+    history_messages = db.query(AiChatMessage).filter(
         AiChatMessage.session_id == session_id
     ).order_by(AiChatMessage.created_at.desc()).limit(10).all()
-    history.reverse()  # Oldest first
+    history_messages.reverse()  # Oldest first
     
-    # Retrieve approved achievements for RAG
+    # Format history for LLM (exclude current message)
+    chat_history = [
+        {
+            "role": msg.role.value,
+            "content": msg.content
+        }
+        for msg in history_messages[:-1]
+    ] if len(history_messages) > 1 else []
+    
+    # Retrieve all achievements for comprehensive AI analysis (not just approved)
+    # 查询所有状态的成果，让AI能够全面分析学生情况
     achievements = db.query(BizAchievement).filter(
         BizAchievement.student_id == student.id,
-        BizAchievement.status == AchievementStatus.APPROVED
-    ).all()
+        BizAchievement.is_deleted == False  # 排除已删除的
+    ).order_by(BizAchievement.created_at.desc()).all()  # 移除20条限制，获取所有成果
     
-    # Build context for LLM
-    achievements_context = "\n".join([
-        f"- {ach.title} ({ach.type})" for ach in achievements
-    ])
+    # Count achievements by status for statistics
+    approved_count = sum(1 for ach in achievements if ach.status == AchievementStatus.APPROVED)
+    pending_count = sum(1 for ach in achievements if ach.status == AchievementStatus.PENDING)
+    rejected_count = sum(1 for ach in achievements if ach.status == AchievementStatus.REJECTED)
     
-    history_context = "\n".join([
-        f"{msg.role.value}: {msg.content}" for msg in history[:-1]  # Exclude current message
-    ])
+    # Build student context with complete achievement data
+    student_context = {
+        "name": student.name,
+        "major": student.major,
+        "class_name": getattr(student, 'class_name', None),
+        "achievements": [
+            {
+                # 基本信息
+                "id": ach.id,
+                "title": ach.title,
+                "type": ach.type,
+                "status": ach.status.value,
+                
+                # 详细内容（OCR识别的结构化数据）
+                "content_json": ach.content_json,
+                
+                # 证书相关
+                "evidence_url": ach.evidence_url,
+                "feishu_attachment_token": ach.feishu_attachment_token,
+                
+                # 审核信息
+                "audit_comment": ach.audit_comment,
+                
+                # 时间信息
+                "created_at": ach.created_at.isoformat() if ach.created_at else None,
+                
+                # 教师信息（如果需要）
+                "teacher_name": ach.teacher.name if ach.teacher else None,
+                "teacher_title": ach.teacher.title if ach.teacher else None,
+                "teacher_department": ach.teacher.department if ach.teacher else None,
+            }
+            for ach in achievements
+        ],
+        "statistics": {
+            "total_achievements": len(achievements),
+            "approved_achievements": approved_count,
+            "pending_achievements": pending_count,
+            "rejected_achievements": rejected_count,
+            "approval_rate": round(approved_count / len(achievements) * 100, 2) if len(achievements) > 0 else 0
+        }
+    }
     
-    # TODO: Call actual LLM API
-    # This is a mock response - replace with actual API call
-    # Example:
-    # async with httpx.AsyncClient() as client:
-    #     response = await client.post(
-    #         settings.LLM_API_URL,
-    #         json={
-    #             "model": "gpt-4",
-    #             "messages": [
-    #                 {"role": "system", "content": f"你是一位学业导师。学生的成果：\n{achievements_context}"},
-    #                 {"role": "user", "content": chat_req.message}
-    #             ]
-    #         },
-    #         headers={"Authorization": f"Bearer {settings.LLM_API_KEY}"}
-    #     )
-    #     ai_response = response.json()["choices"][0]["message"]["content"]
+    # Call AI chat service
+    ai_result = ai_chat_service.chat(
+        user_message=chat_req.message,
+        student_context=student_context,
+        chat_history=chat_history,
+        temperature=0.7,
+        max_tokens=800
+    )
     
-    # Mock AI response
-    ai_response = f"根据你的成果记录，我看到你在{achievements[0].type if achievements else '多个领域'}有不错的表现。关于你的问题：{chat_req.message}，我建议..."
+    # Handle AI service response
+    if not ai_result.get("success"):
+        # Log the error for debugging
+        error_msg = ai_result.get("error", "Unknown error")
+        print(f"❌ AI Chat Service Error: {error_msg}")
+        print(f"Full AI Result: {ai_result}")
+        # Fallback response if AI service fails
+        ai_response = "抱歉，AI助手暂时无法回复。请检查网络连接或稍后再试。"
+    else:
+        ai_response = ai_result.get("message", "抱歉，暂时无法生成回复。")
     
     # Store AI response
     assistant_message = AiChatMessage(
@@ -407,7 +489,8 @@ async def ai_chat(
     
     return success_response(data={
         "session_id": session_id,
-        "message": ai_response
+        "message": ai_response,
+        "usage": ai_result.get("usage") if ai_result.get("success") else None
     })
 
 

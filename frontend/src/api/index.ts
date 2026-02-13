@@ -129,6 +129,14 @@ export function getMyCertificates(): Promise<CertificatesResponse> {
 }
 
 /**
+ * 删除成果
+ * DELETE /api/v1/student/achievements/{id}
+ */
+export function deleteAchievement(achievementId: number | string): Promise<void> {
+    return request.delete(`/api/v1/student/achievements/${achievementId}`)
+}
+
+/**
  * AI对话
  * POST /api/v1/student/ai/chat
  */
@@ -379,6 +387,7 @@ export default {
     submitAchievement,
     getMyAchievements,
     getMyCertificates,
+    deleteAchievement,
     chatWithAI,
     getStudentPersona,
     fetchStudentPortraitByStudentId,

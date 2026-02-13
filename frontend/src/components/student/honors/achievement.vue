@@ -231,6 +231,7 @@ import FeishuQuickImport from './FeishuQuickImport.vue'
 
 import { 
   getMyAchievements,
+  deleteAchievement,
   // 其他可能需要的API
 } from '@/api'
 
@@ -281,11 +282,6 @@ const createAchievement = async (data: any) => {
 
 const updateAchievement = async (id: string, data: any) => {
   console.warn('⚠️ updateAchievement 暂未实现')
-  return true
-}
-
-const deleteAchievement = async (id: string) => {
-  console.warn('⚠️ deleteAchievement 暂未实现')
   return true
 }
 

@@ -5,7 +5,7 @@
 
 // 从@tabler/icons-vue导入所需图标
 // 导航和菜单图标
-import { 
+import {
   IconHome,
   IconChartBar,
   IconBook,
@@ -24,7 +24,7 @@ import {
   IconHelpCircle,
   IconCaretDown,
   IconCaretRight,
-  
+
   // 操作图标
   IconPlus,
   IconMinus,
@@ -38,7 +38,7 @@ import {
   IconEyeOff,
   IconCheck,
   IconX,
-  
+
   // 状态图标
   IconAlertCircle,
   IconInfoCircle,
@@ -59,7 +59,8 @@ import {
   IconExternalLink,
   IconClipboard,
   IconFilter,
-  
+  IconSend,
+
   // 人才市场相关图标
   IconBuilding,
   IconBriefcase,
@@ -97,7 +98,7 @@ export {
   IconHelpCircle,
   IconCaretDown as CaretDown,
   IconCaretRight as CaretRight,
-  
+
   IconPlus,
   IconMinus,
   IconEdit,
@@ -110,12 +111,12 @@ export {
   IconEyeOff,
   IconCheck,
   IconX,
-  
+
   IconAlertCircle,
   IconInfoCircle,
   IconFile,
   IconAlertTriangle,
-  
+
   IconMail,
   IconPhone,
   IconLock,
@@ -128,7 +129,8 @@ export {
   IconExternalLink,
   IconClipboard,
   IconFilter,
-  
+  IconSend,
+
   // 业务相关图标
   IconBuilding,
   IconBriefcase,

@@ -27,6 +27,7 @@ declare module 'vue' {
     DataScreen: typeof import('./src/components/student/stastic/data-screen.vue')['default']
     Feedback: typeof import('./src/components/student/feedback/feedback.vue')['default']
     FeishuQuickImport: typeof import('./src/components/student/honors/FeishuQuickImport.vue')['default']
+    FloatingAiAssistant: typeof import('./src/components/common/FloatingAiAssistant.vue')['default']
     HomePage: typeof import('./src/components/HomePage.vue')['default']
     Jobpage: typeof import('./src/components/student/job/jobpage.vue')['default']
     LoginPage: typeof import('./src/components/student/login/LoginPage.vue')['default']

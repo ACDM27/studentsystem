@@ -4,12 +4,15 @@
     <div class="content">
       <router-view />
     </div>
+    <!-- 全局悬浮AI助手 -->
+    <FloatingAiAssistant />
   </div>
 </template>
 
 <script setup lang="ts">
 import { RouterView } from 'vue-router'
 import StudentSidebar from './student-sidebar.vue'
+import FloatingAiAssistant from '@/components/common/FloatingAiAssistant.vue'
 </script>
 
 <style scoped>

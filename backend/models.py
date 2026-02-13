@@ -1,4 +1,4 @@
-﻿from sqlalchemy import Column, Integer, String, Text, DateTime, Enum, ForeignKey, JSON
+﻿from sqlalchemy import Column, Integer, String, Text, DateTime, Enum, ForeignKey, JSON, Boolean
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import enum
@@ -83,6 +83,7 @@ class BizAchievement(Base):
     feishu_attachment_token = Column(String(200), default=None)  # 飞书附件临时token
     status = Column(Enum(AchievementStatus), default=AchievementStatus.PENDING, index=True)
     audit_comment = Column(Text)  # 审核意见
+    is_deleted = Column(Boolean, default=False, index=True)  # 软删除标记
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
     
     # Relationships
