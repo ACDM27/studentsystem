@@ -35,14 +35,16 @@ services:
     environment:
       # 连接到 'db' 服务，密码与上面 MYSQL_ROOT_PASSWORD 一致
       - DATABASE_URL=mysql+pymysql://root:password@db:3306/student_system
-      # 允许的前端源 (包括容器内部网络和宿主机访问)
+      # 允许的前端源
       - ALLOWED_ORIGINS=*
       # 其他配置
       - SECRET_KEY=your-production-secret-key-change-it
       - UPLOAD_DIR=/app/uploads
-      # AI API Key（通义千问 / 百炼平台，填入真实 Key）
-      - QWEN_API_KEY=sk-3692d8702cf9418f8e982dd35cd27428
-      - DASHSCOPE_API_KEY=sk-3692d8702cf9418f8e982dd35cd27428
+      # AI API Key
+      - QWEN_API_KEY=sk-e529a14ace5644a59fede114654d9a5e
+      - DASHSCOPE_API_KEY=sk-e529a14ace5644a59fede114654d9a5e
+      # 视觉模型名称
+      - QWEN_VL_MODEL=qwen-vl-plus
     volumes:
       - uploads_data:/app/uploads
     networks:
