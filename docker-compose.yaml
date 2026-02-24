@@ -40,8 +40,9 @@ services:
       # 其他配置
       - SECRET_KEY=your-production-secret-key-change-it
       - UPLOAD_DIR=/app/uploads
-      # 这里可以添加您的 AI API Key
-      # - QWEN_API_KEY=your_key_here
+      # AI API Key（通义千问 / 百炼平台，填入真实 Key）
+      - QWEN_API_KEY=sk-3692d8702cf9418f8e982dd35cd27428
+      - DASHSCOPE_API_KEY=sk-3692d8702cf9418f8e982dd35cd27428
     volumes:
       - uploads_data:/app/uploads
     networks:
