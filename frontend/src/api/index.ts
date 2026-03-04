@@ -244,14 +244,42 @@ export function auditAchievement(achievementId: number, data: AuditAchievementRe
 
 /**
  * 获取完整的文件URL
- * 后端返回的是相对路径，需要拼接baseURL
+ * - 对于 /uploads/ 路径：始终返回相对路径并附加 token 查询参数
+ *   开发环境：通过 Vite proxy 转发到后端 (/uploads → localhost:8000/uploads)
+ *   生产环境：通过 Nginx 转发到后端 (/uploads → backend:8000/uploads)
+ * - 对于其他路径：拼接后端根地址
  */
 export function getFileUrl(relativePath: string): string {
     if (!relativePath) return ''
     if (relativePath.startsWith('http')) return relativePath
 
-    const baseURL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000').replace(/\/$/, '')
+    // 统一规范化路径，确保以 / 开头
     const path = relativePath.startsWith('/') ? relativePath : `/${relativePath}`
+
+    // 对于上传文件（证书图片），始终使用相对路径
+    // 这样可以通过 Vite proxy（开发）或 Nginx（生产）转发到后端
+    // 避免直接访问 localhost:8000 绕过代理层，同时解决跨域问题
+    if (path.startsWith('/uploads/')) {
+        const token = localStorage.getItem('token')
+        if (token) {
+            const separator = path.includes('?') ? '&' : '?'
+            return `${path}${separator}token=${encodeURIComponent(token)}`
+        }
+        return path
+    }
+
+    // 非 uploads 路径：拼接后端 API 根域名
+    let baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+    if (baseURL === '/' || baseURL === '') {
+        baseURL = ''
+    } else {
+        try {
+            const url = new URL(baseURL)
+            baseURL = `${url.protocol}//${url.host}`
+        } catch {
+            baseURL = baseURL.replace(/\/$/, '').replace(/\/api$/, '')
+        }
+    }
 
     return `${baseURL}${path}`
 }

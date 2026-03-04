@@ -820,20 +820,20 @@ const levelMap: Record<string, string> = {
 
 // 奖项等级映射表（后端值 -> 前端显示）- 扩展支持更多字段值
 const prizeMap: Record<string, string> = {
-  // 英文值（无下划线）- 根据需求修正映射
-  'honorablemention': '特等奖',
+  // 英文值（无下划线）- 与 award_opts 定义一致
+  'grandprize': '特等奖',
   'firstprize': '一等奖',
   'secondprize': '二等奖',
   'thirdprize': '三等奖',
-  'grandprize': '优秀奖',
+  'honorablemention': '优秀奖',
   'other': '参与奖',
   
   // 英文值（带下划线）- 兼容性支持
-  'honorable_mention': '特等奖',
+  'grand_prize': '特等奖',
   'first_prize': '一等奖',
   'second_prize': '二等奖',
   'third_prize': '三等奖',
-  'grand_prize': '优秀奖',
+  'honorable_mention': '优秀奖',
   
   // 数字值 - 兼容性支持
   '0': '特等奖',
@@ -949,12 +949,19 @@ const formatDate = (dateStr?: string): string => {
   if (!dateStr) return ''
   
   try {
+    // 优先处理 YYYY-MM-DD 纯日期格式（证书上的获奖日期）
+    // 避免 new Date() 解析时产生的时区偏移
+    const pureDateMatch = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+    if (pureDateMatch) {
+      return dateStr // 纯日期格式直接返回，无需转换
+    }
+    
     const date = new Date(dateStr)
     if (isNaN(date.getTime())) {
       return dateStr // 如果无法解析，返回原字符串
     }
     
-    // 格式化为 YYYY-MM-DD
+    // 格式化为 YYYY-MM-DD（使用本地时间）
     const year = date.getFullYear()
     const month = String(date.getMonth() + 1).padStart(2, '0')
     const day = String(date.getDate()).padStart(2, '0')

@@ -118,14 +118,35 @@ class FileManager:
         if is_admin:
             return True
         
-        # Convert URL to path if needed
-        if file_path.startswith("/uploads/"):
-            file_path = file_path.replace("/uploads/", "")
+        # Empty or None evidence_url means no certificate attached - allow it
+        if not file_path:
+            return True
+        
+        # If it's an external URL (http/https), allow it
+        # (e.g., Feishu attachment URLs)
+        if file_path.startswith(("http://", "https://")):
+            return True
+        
+        # Normalize path: handle both forward and backward slashes
+        normalized = file_path.replace("\\", "/")
+        
+        # Strip /uploads/ prefix if present
+        if normalized.startswith("/uploads/"):
+            normalized = normalized[len("/uploads/"):]
+        elif normalized.startswith("uploads/"):
+            normalized = normalized[len("uploads/"):]
         
         # Check if file belongs to student's directory
         expected_prefix = f"certificates/student_{student_id}/"
         
-        return file_path.startswith(expected_prefix)
+        result = normalized.startswith(expected_prefix)
+        
+        if not result:
+            print(f"[verify_certificate_access] DENIED: student_id={student_id}, "
+                  f"file_path='{file_path}', normalized='{normalized}', "
+                  f"expected_prefix='{expected_prefix}'")
+        
+        return result
     
     def get_certificate_full_path(self, file_url: str) -> Optional[Path]:
         """

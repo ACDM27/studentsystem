@@ -25,10 +25,15 @@ export default defineConfig(({ mode }) => {
       host: '0.0.0.0',
       port: 5173,
       proxy: {
+        // 代理 API 请求到后端（不做 rewrite，保持路径原样转发）
         '/api': {
           target: 'http://localhost:8000',
-          changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/api/, '')
+          changeOrigin: true
+        },
+        // 代理上传文件/证书图片访问到后端（修复管理员查看证书图片失败问题）
+        '/uploads': {
+          target: 'http://localhost:8000',
+          changeOrigin: true
         }
       }
     },

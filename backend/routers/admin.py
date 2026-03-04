@@ -122,6 +122,71 @@ async def audit_achievement(
     
     db.commit()
     
-    # TODO: Send notification to student (optional)
+    # --- 团队成果审批同步 ---
+    # 查找所有关联的团队成员成果，同步审核状态
+    synced_count = 0
     
-    return success_response(msg=f"Achievement {audit_req.action}d successfully")
+    # 情况1：当前成果是原始成果，查找通过 source_achievement_id 指向本成果的关联记录
+    related_achievements = db.query(BizAchievement).filter(
+        BizAchievement.id != achievement_id,
+        BizAchievement.is_deleted == False
+    ).all()
+    
+    for related in related_achievements:
+        if related.content_json and isinstance(related.content_json, dict):
+            source_id = related.content_json.get("source_achievement_id")
+            if source_id and source_id == achievement_id:
+                related.status = achievement.status
+                related.audit_comment = achievement.audit_comment
+                # 同步失效学生画像缓存
+                if audit_req.action == "approve":
+                    related_student = db.query(SysStudent).filter(
+                        SysStudent.id == related.student_id
+                    ).first()
+                    if related_student:
+                        related_student.persona_cache = None
+                synced_count += 1
+    
+    # 情况2：当前成果是关联成果（有 source_achievement_id），同步原始成果及其他关联
+    if achievement.content_json and isinstance(achievement.content_json, dict):
+        source_id = achievement.content_json.get("source_achievement_id")
+        if source_id:
+            # 同步原始成果
+            source_achievement = db.query(BizAchievement).filter(
+                BizAchievement.id == source_id
+            ).first()
+            if source_achievement:
+                source_achievement.status = achievement.status
+                source_achievement.audit_comment = achievement.audit_comment
+                if audit_req.action == "approve":
+                    source_student = db.query(SysStudent).filter(
+                        SysStudent.id == source_achievement.student_id
+                    ).first()
+                    if source_student:
+                        source_student.persona_cache = None
+                synced_count += 1
+            
+            # 同步同源的其他关联成果
+            for related in related_achievements:
+                if related.id == achievement_id:
+                    continue
+                if related.content_json and isinstance(related.content_json, dict):
+                    rel_source = related.content_json.get("source_achievement_id")
+                    if rel_source and rel_source == source_id:
+                        related.status = achievement.status
+                        related.audit_comment = achievement.audit_comment
+                        if audit_req.action == "approve":
+                            rel_student = db.query(SysStudent).filter(
+                                SysStudent.id == related.student_id
+                            ).first()
+                            if rel_student:
+                                rel_student.persona_cache = None
+                        synced_count += 1
+    
+    if synced_count > 0:
+        db.commit()
+    
+    return success_response(
+        msg=f"Achievement {audit_req.action}d successfully" + 
+            (f", synced {synced_count} related records" if synced_count > 0 else "")
+    )

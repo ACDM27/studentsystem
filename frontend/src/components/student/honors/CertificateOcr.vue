@@ -190,9 +190,18 @@
                  </n-form-item>
                </n-grid-item>
                <n-grid-item>
-                 <n-form-item label="成果标题" path="title">
-                   <n-input v-model:value="current_file.data.title" placeholder="请输入完整成果名称" />
-                 </n-form-item>
+                  <n-form-item label="成果标题" path="title">
+                    <n-input 
+                      v-model:value="current_file.data.title" 
+                      placeholder="AI已根据证书内容智能生成，请核对并修改"
+                      type="textarea"
+                      :rows="3"
+                    />
+                    <div class="title-hint">
+                      <n-icon size="13"><IconInfoCircle /></n-icon>
+                      标题由AI根据证书类别、获奖人、成果名称等信息智能生成，请核对准确性
+                    </div>
+                  </n-form-item>
                </n-grid-item>
              </n-grid>
 
@@ -247,6 +256,46 @@
                 证书识别：{{ current_file.data.advisors_text }}
               </div>
             </n-form-item>
+
+            <!-- 扩展信息：论文/科研/项目相关补充字段 -->
+            <n-collapse class="extra-fields-collapse">
+              <n-collapse-item title="📋 学术补充信息（论文/科研/项目类必填）" name="extra">
+                <n-grid :cols="2" :x-gap="12">
+                  <n-grid-item>
+                    <n-form-item label="论文/作品题目">
+                      <n-input 
+                        v-model:value="current_file.data.paper_title" 
+                        placeholder="如有论文，请填写完整题目"
+                      />
+                    </n-form-item>
+                  </n-grid-item>
+                  <n-grid-item>
+                    <n-form-item label="期刊/会议名称">
+                      <n-input 
+                        v-model:value="current_file.data.journal_name"
+                        placeholder="如 SCI一区、EI、核心期刊等"
+                      />
+                    </n-form-item>
+                  </n-grid-item>
+                  <n-grid-item>
+                    <n-form-item label="项目名称">
+                      <n-input 
+                        v-model:value="current_file.data.project_name"
+                        placeholder="若为科研/创业项目，填写项目全称"
+                      />
+                    </n-form-item>
+                  </n-grid-item>
+                  <n-grid-item>
+                    <n-form-item label="承担角色">
+                      <n-input 
+                        v-model:value="current_file.data.role"
+                        placeholder="如：第一作者、项目负责人、主要参与者"
+                      />
+                    </n-form-item>
+                  </n-grid-item>
+                </n-grid>
+              </n-collapse-item>
+            </n-collapse>
 
           </n-form>
           
@@ -306,6 +355,10 @@ interface FileItem {
     issuer?: string
     certificate_number?: string
     project_name?: string
+    paper_title?: string       // 论文题目
+    journal_name?: string      // 期刊/会议名称
+    role?: string              // 承担角色
+    location?: string          // 活动/发表地点
     team_members?: string[]    // 🔥 所有参赛学生（从OCR识别）
     additional_info?: string
   }
@@ -402,6 +455,10 @@ const handle_batch_upload = async ({ file, onFinish }: UploadCustomRequestOption
       issuer: '',
       certificate_number: '',
       project_name: '',
+      paper_title: '',          // 论文题目
+      journal_name: '',         // 期刊/会议名称
+      role: '',                 // 承担角色
+      location: '',             // 活动/颁发地点
       team_members: [],
       additional_info: ''
     }
@@ -449,10 +506,12 @@ const process_ocr = async (item: FileItem) => {
       item.data.evidence_url = res.file_url
       console.log('✅ evidence_url:', item.data.evidence_url)
       
-      // 2. 标题
-      if (raw.title) {
-        item.data.title = raw.title
-        console.log('✅ title:', item.data.title)
+      // 2. 标题 —— 无条件覆盖：后端已经过智能标题生成，直接采用
+      // （不用 if(raw.title) 的原因：避免后端返回空字符串时使用旧初始值）
+      item.data.title = raw.title || ''
+      console.log('✅ title (from backend smart gen):', item.data.title)
+      if (!item.data.title) {
+        console.warn('⚠️ 后端返回的标题为空，请检查智能标题生成逻辑或OCR模型输出')
       }
       
       // 3. 日期处理
@@ -657,6 +716,28 @@ const process_ocr = async (item: FileItem) => {
         console.log('✅ project_name:', item.data.project_name)
       }
       
+      // ========== 新增扩展字段：学术成果详细信息 ==========
+      
+      if (raw.paper_title) {
+        item.data.paper_title = raw.paper_title
+        console.log('✅ paper_title:', item.data.paper_title)
+      }
+      
+      if (raw.journal_name) {
+        item.data.journal_name = raw.journal_name
+        console.log('✅ journal_name:', item.data.journal_name)
+      }
+      
+      if (raw.role) {
+        item.data.role = raw.role
+        console.log('✅ role:', item.data.role)
+      }
+      
+      if (raw.location) {
+        item.data.location = raw.location
+        console.log('✅ location:', item.data.location)
+      }
+      
       if (raw.team_members && Array.isArray(raw.team_members)) {
         item.data.team_members = raw.team_members
         console.log('✅ team_members:', item.data.team_members.join(', '))
@@ -805,7 +886,13 @@ const submit_single = async (item: FileItem) => {
           content_json: {
             award: item.data.award,
             level: item.data.level,
-            date: new Date(item.data.date!).toISOString(),
+            date: (() => {
+              const d = new Date(item.data.date!)
+              const yyyy = d.getFullYear()
+              const mm = String(d.getMonth() + 1).padStart(2, '0')
+              const dd = String(d.getDate()).padStart(2, '0')
+              return `${yyyy}-${mm}-${dd}`
+            })(),
             // 🔥 保存所有指导教师ID
             teacher_ids: item.data.teacher_ids,
             // 补充更多 OCR 识别出的元数据
@@ -1223,6 +1310,39 @@ onMounted(async () => {
   color: #999;
   display: flex;
   align-items: center;
+}
+
+/* 智能生成标题提示 */
+.title-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #1677ff;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: #f0f7ff;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border-left: 3px solid #1677ff;
+}
+
+/* 学术补充信息折叠面板 */
+.extra-fields-collapse {
+  margin-top: 12px;
+  border: 1px dashed #d1d5db;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.extra-fields-collapse :deep(.n-collapse-item__header) {
+  background: #fafafa;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: #374151;
+}
+
+.extra-fields-collapse :deep(.n-collapse-item__content-inner) {
+  padding: 12px;
 }
 
 /* 移动端适配 */

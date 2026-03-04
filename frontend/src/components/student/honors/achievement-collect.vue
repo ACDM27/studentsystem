@@ -42,7 +42,7 @@
                 <n-input 
                   v-model:value="form_data.student_id" 
                   placeholder="请输入学号"
-                  clearable
+                  disabled
                 />
               </n-form-item>
             </n-grid-item>
@@ -52,7 +52,7 @@
                 <n-input 
                   v-model:value="form_data.name" 
                   placeholder="请输入姓名"
-                  clearable
+                  disabled
                 />
               </n-form-item>
             </n-grid-item>
@@ -234,7 +234,8 @@ import {
 } from '@tabler/icons-vue'
 import {
   submitAchievement,
-  getTeachers
+  getTeachers,
+  getStudentMe
 } from '@/api'
 
 // === API 适配器 ===
@@ -242,9 +243,21 @@ import {
 // 1. 创建成果适配器
 const createAchievement = async (payload: any): Promise<any> => {
   const d = payload.data
+  // 从教师选项中查找选中导师的真实 ID
+  const selectedTeacher = filtered_teacher_opts.value.find(
+    t => t.value === d.tutor_name
+  )
+  const teacherId = selectedTeacher?.teacher_id
+    ? Number(selectedTeacher.teacher_id)
+    : null
+
+  if (!teacherId) {
+    throw new Error('请选择有效的导师')
+  }
+
   // 转换数据格式
   return submitAchievement({
-      teacher_id: 1, // 默认 ID，因为旧表单未提供 ID
+      teacher_id: teacherId,
       title: d.title,
       type: d.category || 'competition',
       content_json: { ...d },
@@ -779,7 +792,13 @@ const submitAchievementForm = async () => {
         category: categoryBackendValue,  // 使用映射后的值
         award: form_data.value.award,
         level: form_data.value.level,
-        date: form_data.value.date ? new Date(form_data.value.date).toISOString() : new Date().toISOString(),
+        date: form_data.value.date ? (() => {
+          const d = new Date(form_data.value.date)
+          const yyyy = d.getFullYear()
+          const mm = String(d.getMonth() + 1).padStart(2, '0')
+          const dd = String(d.getDate()).padStart(2, '0')
+          return `${yyyy}-${mm}-${dd}`
+        })() : '',
         title: form_data.value.title.trim(),
         tutor_department: form_data.value.tutor_department,
         tutor_name: form_data.value.tutor_name,
@@ -855,10 +874,39 @@ const init_departments = async () => {
   }
 }
 
+// 自动填入当前登录学生的信息
+const loadCurrentStudentInfo = async () => {
+  try {
+    const studentInfo = await getStudentMe()
+    if (studentInfo) {
+      form_data.value.student_id = studentInfo.student_id || ''
+      form_data.value.name = studentInfo.name || ''
+      console.log('已自动填入学生信息:', { student_id: studentInfo.student_id, name: studentInfo.name })
+    }
+  } catch (error) {
+    console.warn('获取当前学生信息失败，尝试从本地读取:', error)
+    // 回退：从 localStorage 读取登录时存储的 userInfo
+    try {
+      const userInfoStr = localStorage.getItem('userInfo')
+      if (userInfoStr) {
+        const userInfo = JSON.parse(userInfoStr)
+        form_data.value.student_id = userInfo.student_id || ''
+        form_data.value.name = userInfo.name || ''
+        console.log('已从本地存储填入学生信息')
+      }
+    } catch (e) {
+      console.error('从本地存储读取用户信息失败:', e)
+    }
+  }
+}
+
 // 页面初始化
 onMounted(() => {
   // 1. 同步学院数据
   init_departments()
+
+  // 2. 自动填入当前登录学生的信息
+  loadCurrentStudentInfo()
 
   // 页面初始化，不再预加载所有教师数据
   // 教师数据将在用户选择学院时按需加载
@@ -869,8 +917,10 @@ onMounted(() => {
     if (draft) {
       const draft_data = JSON.parse(draft)
       // 恢复基本数据，但不恢复文件列表（文件对象无法序列化）
+      // 不覆盖已自动填入的 student_id 和 name
+      const { student_id, name, ...otherDraftData } = draft_data
       Object.assign(form_data.value, {
-        ...draft_data,
+        ...otherDraftData,
         attachments: [] // 重置文件列表
       })
       message.info('已恢复上次保存的草稿（不包含文件）')

@@ -56,23 +56,27 @@ async def ocr_recognize(
             
             return success_response(data={
                 "recognized_data": {
-                    # Basic fields
-                    "title": data.get("certificate_name"),
+                    # 标题：优先使用智能生成的 title（validate_recognition_result 已处理）
+                    # 其次兜底到 certificate_name
+                    "title": data.get("title") or data.get("certificate_name"),
                     "date": data.get("issue_date"),
                     "issuer": data.get("issuing_organization"),
                     "suggested_type": data.get("category"),
-                    "award_level": data.get("award_level"),  # 奖项级别（国家级、省部级等）
-                    "award": data.get("award"),  # 具体奖项（一等奖、二等奖等）
+                    "award_level": data.get("award_level"),   # 奖项级别（国家级、省部级等）
+                    "award": data.get("award"),               # 具体奖项（一等奖、优胜奖等）
                     "certificate_number": data.get("certificate_number"),
                     "recipient_name": data.get("recipient_name"),
-                    
-                    # New enhanced fields
+
+                    # 增强字段
                     "project_name": data.get("project_name"),
+                    "paper_title": data.get("paper_title"),   # 论文题目
+                    "journal_name": data.get("journal_name"), # 期刊/会议名称
+                    "role": data.get("role"),                 # 承担角色
                     "team_members": data.get("team_members", []),
                     "advisors": data.get("advisors", []),
                     "additional_info": data.get("additional_info"),
-                    
-                    # Confidence scores
+
+                    # 置信度评分
                     "recognition_confidence": data.get("recognition_confidence", {})
                 },
                 "file_url": file_info["file_url"],
@@ -152,7 +156,59 @@ async def create_achievement(
     db.commit()
     db.refresh(new_achievement)
     
-    return success_response(data={"id": new_achievement.id}, msg="Achievement submitted successfully")
+    # --- 团队成员自动同步 ---
+    # 从 content_json 中读取 team_members，为每个匹配到的学生创建关联成果
+    synced_members = []
+    team_members = []
+    if achievement.content_json and isinstance(achievement.content_json, dict):
+        team_members = achievement.content_json.get("team_members", [])
+    
+    if team_members and isinstance(team_members, list):
+        for member_name in team_members:
+            if not member_name or not isinstance(member_name, str):
+                continue
+            member_name = member_name.strip()
+            if not member_name:
+                continue
+            
+            # 查找与该姓名匹配的学生（排除提交者自身）
+            matched_student = db.query(SysStudent).filter(
+                SysStudent.name == member_name,
+                SysStudent.id != student.id
+            ).first()
+            
+            if matched_student:
+                # 构建关联成果的 content_json，标记来源
+                member_content = dict(achievement.content_json) if achievement.content_json else {}
+                member_content["source_achievement_id"] = new_achievement.id
+                member_content["synced_from_student"] = student.name
+                
+                member_achievement = BizAchievement(
+                    student_id=matched_student.id,
+                    teacher_id=achievement.teacher_id,
+                    title=achievement.title,
+                    type=achievement.type,
+                    content_json=member_content,
+                    evidence_url=achievement.evidence_url,
+                    status=AchievementStatus.PENDING
+                )
+                db.add(member_achievement)
+                synced_members.append(member_name)
+        
+        if synced_members:
+            # 在原始成果的 content_json 中也标记已同步的成员
+            original_content = dict(new_achievement.content_json) if new_achievement.content_json else {}
+            original_content["synced_to_members"] = synced_members
+            new_achievement.content_json = original_content
+            db.commit()
+    
+    return success_response(
+        data={
+            "id": new_achievement.id,
+            "synced_members": synced_members
+        },
+        msg="Achievement submitted successfully"
+    )
 
 
 @router.get("/achievements")
@@ -183,6 +239,15 @@ async def get_my_achievements(
     
     achievement_list = []
     for ach in achievements:
+        # 从 content_json 提取真实获奖日期（证书上的日期）
+        award_date = None
+        if ach.content_json and isinstance(ach.content_json, dict):
+            award_date = (
+                ach.content_json.get("date")
+                or ach.content_json.get("issue_date")
+                or ach.content_json.get("award_date")
+            )
+        
         achievement_list.append({
             "id": ach.id,
             "title": ach.title,
@@ -191,6 +256,7 @@ async def get_my_achievements(
             "evidence_url": ach.evidence_url,
             "status": ach.status.value,
             "audit_comment": ach.audit_comment,
+            "date": award_date,  # 证书上的真实获奖日期
             "created_at": ach.created_at.isoformat(),
             "teacher_name": ach.teacher.name if ach.teacher else None
         })
