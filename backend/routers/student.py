@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Query
+from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import Optional, List
 import uuid
@@ -23,6 +23,7 @@ router = APIRouter(prefix="/api/v1/student", tags=["Student"])
 @router.post("/ocr/recognize")
 async def ocr_recognize(
     file: UploadFile = File(...),
+    cert_type: Optional[str] = Form(None),
     student: SysStudent = Depends(require_student)
 ):
     """
@@ -40,15 +41,21 @@ async def ocr_recognize(
         # Step 1: Save certificate permanently
         file_info = await file_manager.save_certificate_permanent(file, student.id)
         
-        # Step 2: Recognize certificate using AI (OpenAI-compatible API)
-        recognition_result = certificate_recognition_service_openai.recognize_certificate(
-            file_info["file_path"]
-        )
-        
-        # Step 3: Validate result
-        validated_result = certificate_recognition_service_openai.validate_recognition_result(
-            recognition_result
-        )
+        # Step 2: Recognize - 有 cert_type 则走类型专属模板，否则走自动分类
+        if cert_type and cert_type in ("competition", "patent", "research", "project", "certificate", "certification", "paper"):
+            recognition_result = certificate_recognition_service_openai.recognize_by_type(
+                file_info["file_path"], cert_type
+            )
+            validated_result = certificate_recognition_service_openai.validate_by_type(
+                recognition_result, cert_type
+            )
+        else:
+            recognition_result = certificate_recognition_service_openai.recognize_smart(
+                file_info["file_path"]
+            )
+            validated_result = certificate_recognition_service_openai.validate_recognition_result(
+                recognition_result
+            )
         
         # Step 4: Return result
         if validated_result.get("success"):
@@ -56,28 +63,59 @@ async def ocr_recognize(
             
             return success_response(data={
                 "recognized_data": {
+                    # 文档类型（两阶段OCR分类结果）
+                    "document_type": data.get("document_type", "certificate"),
+
                     # 标题：优先使用智能生成的 title（validate_recognition_result 已处理）
-                    # 其次兜底到 certificate_name
                     "title": data.get("title") or data.get("certificate_name"),
-                    "date": data.get("issue_date"),
+                    "date": data.get("issue_date") or data.get("publish_date"),
                     "issuer": data.get("issuing_organization"),
                     "suggested_type": data.get("category"),
-                    "award_level": data.get("award_level"),   # 奖项级别（国家级、省部级等）
-                    "award": data.get("award"),               # 具体奖项（一等奖、优胜奖等）
+                    "award_level": data.get("award_level"),
+                    "award": data.get("award"),
                     "certificate_number": data.get("certificate_number"),
                     "recipient_name": data.get("recipient_name"),
 
-                    # 增强字段
+                    # 证书增强字段
                     "project_name": data.get("project_name"),
-                    "paper_title": data.get("paper_title"),   # 论文题目
-                    "journal_name": data.get("journal_name"), # 期刊/会议名称
-                    "role": data.get("role"),                 # 承担角色
+                    "role": data.get("role"),
                     "team_members": data.get("team_members", []),
                     "advisors": data.get("advisors", []),
                     "additional_info": data.get("additional_info"),
 
+                    # 论文专属字段（两阶段OCR paper路径）
+                    "paper_title": data.get("paper_title"),
+                    "journal_name": data.get("journal_name"),
+                    "journal_level": data.get("journal_level"),
+                    "publish_status": data.get("publish_status"),
+                    "publish_date": data.get("publish_date"),
+                    "authors": data.get("authors", []),
+                    "first_author": data.get("first_author"),
+                    "author_order": data.get("author_order"),
+                    "doi": data.get("doi"),
+                    "issn": data.get("issn"),
+
                     # 置信度评分
-                    "recognition_confidence": data.get("recognition_confidence", {})
+                    "recognition_confidence": data.get("recognition_confidence", {}),
+
+                    # 专利专属字段
+                    "patent_name": data.get("patent_name"),
+                    "patent_number": data.get("patent_number"),
+                    "patent_type": data.get("patent_type"),
+                    "patent_holder": data.get("patent_holder"),
+                    "application_date": data.get("application_date"),
+                    # 科研专属字段
+                    "achievement_name": data.get("achievement_name"),
+                    "registration_number": data.get("registration_number"),
+                    "achievement_type": data.get("achievement_type"),
+                    "applicant_unit": data.get("applicant_unit"),
+                    # 项目专属字段
+                    "project_name": data.get("project_name"),
+                    "team_leader": data.get("team_leader"),
+                    "project_source": data.get("project_source"),
+                    # 荣誉证书专属字段
+                    "award_reason": data.get("award_reason"),
+                    "valid_period": data.get("valid_period"),
                 },
                 "file_url": file_info["file_url"],
                 "file_info": {

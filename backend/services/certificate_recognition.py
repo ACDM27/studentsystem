@@ -3,6 +3,7 @@ Certificate Recognition Service
 Uses Alibaba Cloud Bailian (Qwen-plus) to recognize and extract information from achievement certificates
 """
 
+import re
 import base64
 import json
 import io
@@ -96,10 +97,11 @@ class CertificateRecognitionService:
 4. **issue_date** (颁发日期): 格式必须为 "YYYY-MM-DD"（如 2024-05-20）。如果未找到年份，默认使用当前年份。
 5. **certificate_number** (证书编号): 通常位于角落或正文中。
 6. **award_level** (奖项等级/证书级别): 必须从以下选项中推断最接近的一个：
-   - "国家级" (出现"全国"、"国际"、"教育部"等)
+   - "国家级" (出现"全国"、"国际"、"教育部"、"国家知识产权局"、专利号以"ZL"或"CN"开头等)
    - "省部级" (出现"省"、"厅"、"自治区"等)
    - "校级" (出现"学校"、"大学"、"学院"且无更高行政单位)
    - "院级" (出现"二级学院"、"系"等)
+   - 若为专利类且无法从文字判断，请填 null，系统将根据专利号自动推断
 7. **category** (成果类别): 请根据内容推断，从以下选项中选择一个最合适的：
    - "competition" (学科竞赛/技能大赛)
    - "research" (科研成果)
@@ -114,6 +116,7 @@ class CertificateRecognitionService:
 12. **project_name** (项目名称): 若为科研项目/创新创业类，提取完整的项目名称。
 13. **role** (承担角色): 若为团队成果，提取获奖人在团队中的具体角色（如"项目负责人"、"第一作者"、"主要参与者"等）。
 14. **location** (活动/发表地点): 比赛举办地、期刊出版地等，如果有的话。
+15. **patent_number** (专利号/登记号): 若为专利或软件著作权，务必完整提取编号，例如 "ZL202310123456.7"、"CN202310123456A"、"2023SR0123456"。此字段将用于自动判断专利级别，请勿遗漏。
 
 请严格以JSON格式返回，不要包含Markdown格式（如```json ... ```），直接返回JSON对象。
 
@@ -133,6 +136,7 @@ JSON 模板（包含所有可能字段，无法识别的填null）：
     "project_name": null,
     "role": null,
     "location": null,
+    "patent_number": null,
     "additional_info": "其他备注"
 }
 
@@ -249,6 +253,43 @@ JSON 模板（包含所有可能字段，无法识别的填null）：
             results.append(result)
         return results
     
+    def _infer_patent_level(self, reg_no: str) -> str:
+        """
+        根据专利号 / 软件著作权登记号推断成果级别。
+
+        判断规则（优先级从高到低）：
+        1. ZL 前缀  → 国家知识产权局授权专利，国家级
+        2. CN 前缀  → 中国专利申请公开号，国家级
+        3. 软著格式 2023SR0123456（年份 + SR + 7位序号）→ 国家级
+        4. 正则格式匹配：
+           - 国家格式  ^\d{4}[A-Z]{2}\d{3}[A-Z]\d{6}$
+           - 自治区格式 ^\d{4}N\d{3}[A-Z]\d{6}$（广西等自治区）
+        5. 以上均不符合 → 返回空字符串（交由人工确认）
+        """
+        if not reg_no:
+            return ""
+
+        cleaned = re.sub(r'[\s.\-]', '', reg_no.strip().upper())
+
+        # ZL / CN 前缀 → 国家知识产权局，国家级
+        if cleaned.startswith('ZL') or cleaned.startswith('CN'):
+            return "国家级"
+
+        # 软件著作权登记号：年份(4位) + SR + 7位数字，例如 2023SR0123456
+        if re.match(r'^\d{4}SR\d{7}$', cleaned):
+            return "国家级"
+
+        # 正则格式匹配
+        patterns = {
+            "国家级": r"^\d{4}[A-Z]{2}\d{3}[A-Z]\d{6}$",  # 国家标准格式
+            "自治区级": r"^\d{4}N\d{3}[A-Z]\d{6}$",        # 广西/自治区格式（N 前缀）
+        }
+        for level, pattern in patterns.items():
+            if re.match(pattern, cleaned):
+                return level
+
+        return ""
+
     def _generate_smart_title(self, data: Dict) -> str:
         """
         根据OCR识别出的各字段，智能生成一个具体、有描述性的证书标题。
@@ -421,10 +462,23 @@ JSON 模板（包含所有可能字段，无法识别的填null）：
             "project_name": data.get("project_name", ""),
             "role": data.get("role", ""),
             "location": data.get("location", ""),
+            "patent_number": data.get("patent_number", ""),
             "additional_info": data.get("additional_info"),
             "recognition_time": data.get("recognition_time"),
             "model_used": data.get("model_used")
         }
+
+        # ─── 专利级别自动推断 ───
+        # 当 category 为 patent 且 award_level 为空或未识别时，
+        # 优先用 patent_number，其次用 certificate_number 推断级别
+        if cleaned_data.get("category") == "patent":
+            current_level = (cleaned_data.get("award_level") or "").strip()
+            if not current_level or current_level == "待人工确认":
+                patent_no = (cleaned_data.get("patent_number") or
+                             cleaned_data.get("certificate_number") or "")
+                inferred = self._infer_patent_level(patent_no)
+                if inferred:
+                    cleaned_data["award_level"] = inferred
 
         # ─── 智能标题生成 ───
         generic_names = {"荣誉证书", "获奖证书", "奖状", "证书", "证明", "奖励证书", "优秀证书"}

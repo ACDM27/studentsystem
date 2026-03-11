@@ -25,6 +25,7 @@ export interface LoginResponse {
     access_token: string
     refresh_token: string
     token_type: string
+    is_first_login: boolean
     userInfo: {
         id: number
         username: string
@@ -62,18 +63,53 @@ export interface RecognizedData {
     title: string
     type: string
     issuer: string
-    date: string
+    date?: string
     award_level?: string
     certificate_number?: string
     recipient_name?: string
-    suggested_type: string
+    suggested_type?: string
     award?: string
     advisor_name?: string
-    // 以下为扩展识别字段
+    document_type?: string
+    category?: string
+    // 通用扩展字段
     project_name?: string
     team_members?: string[]
-    advisors?: string[]  // 指导老师数组（与后端API保持一致）
+    advisors?: string[]
     additional_info?: string
+    issue_date?: string
+    issuing_organization?: string
+    // 论文专属
+    paper_title?: string
+    journal_name?: string
+    journal_level?: string
+    publish_status?: string
+    publish_date?: string
+    authors?: string[]
+    first_author?: string
+    author_order?: string
+    doi?: string
+    issn?: string
+    role?: string
+    location?: string
+    // 专利专属
+    patent_name?: string
+    patent_number?: string
+    patent_type?: string
+    patent_holder?: string
+    application_date?: string
+    // 科研成果专属
+    achievement_name?: string
+    registration_number?: string
+    achievement_type?: string
+    applicant_unit?: string
+    // 项目专属
+    team_leader?: string
+    project_source?: string
+    // 荣誉证书专属
+    certificate_name?: string
+    award_reason?: string
+    valid_period?: string
 }
 
 export interface CertificateRecognitionResponse {

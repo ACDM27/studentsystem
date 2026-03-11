@@ -15,6 +15,17 @@
 
     <!-- 批量上传区域 -->
     <div class="upload_section">
+      <!-- 证书类型预选（让AI使用专属识别模板，效果更准确） -->
+      <div style="margin-bottom: 12px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+        <span style="color: #555; font-size: 13px; white-space: nowrap;">📌 上传前选择类型，AI识别更精准：</span>
+        <n-select
+          v-model:value="default_cert_type"
+          :options="cert_type_select_opts"
+          placeholder="自动识别（默认）"
+          clearable
+          style="width: 200px;"
+        />
+      </div>
       <n-upload
         multiple
         directory-dnd
@@ -257,6 +268,42 @@
               </div>
             </n-form-item>
 
+            <!-- 专利专属字段（当类别为专利时显示） -->
+            <template v-if="current_file?.data?.category === 'patent'">
+              <n-divider style="margin: 12px 0 8px">专利详细信息</n-divider>
+              <n-grid :cols="2" :x-gap="12">
+                <n-grid-item>
+                  <n-form-item label="专利号 / 登记号">
+                    <n-input
+                      v-model:value="current_file.data.patent_number"
+                      placeholder="如：CN123456789B"
+                      clearable
+                    />
+                  </n-form-item>
+                </n-grid-item>
+                <n-grid-item>
+                  <n-form-item label="发明人 / 著作权人">
+                    <n-input
+                      v-model:value="current_file.data.patent_inventors"
+                      placeholder="多人用顿号分隔，如：张三、李四"
+                      clearable
+                    />
+                  </n-form-item>
+                </n-grid-item>
+              </n-grid>
+              <n-grid :cols="1" :x-gap="12">
+                <n-grid-item>
+                  <n-form-item label="专利权人 / 著作权人单位">
+                    <n-input
+                      v-model:value="current_file.data.patent_holder"
+                      placeholder="如：广西警察学院"
+                      clearable
+                    />
+                  </n-form-item>
+                </n-grid-item>
+              </n-grid>
+            </template>
+
             <!-- 扩展信息：论文/科研/项目相关补充字段 -->
             <n-collapse class="extra-fields-collapse">
               <n-collapse-item title="📋 学术补充信息（论文/科研/项目类必填）" name="extra">
@@ -303,9 +350,20 @@
             <n-alert v-if="current_file.status === 'error'" type="warning" class="mb-4" title="识别提示" closable>
               AI 未能完全识别所有字段，请人工补全信息后再提交。
             </n-alert>
-            <n-button block type="primary" size="large" @click="submit_single(current_file)" :loading="submitting">
-              确认无误，提交审核
-            </n-button>
+            <n-space vertical>
+              <n-button
+                block
+                secondary
+                size="medium"
+                :loading="current_file.status === 'processing'"
+                @click="rerun_ocr(current_file)"
+              >
+                🔄 切换类型重新识别（当前：{{ category_opts.find(o => o.value === current_file.data.category)?.label || '自动' }}）
+              </n-button>
+              <n-button block type="primary" size="large" @click="submit_single(current_file)" :loading="submitting">
+                确认无误，提交审核
+              </n-button>
+            </n-space>
           </div>
         </div>
       </div>
@@ -352,15 +410,28 @@ interface FileItem {
     advisors_text?: string     // 🔥 新增：所有指导老师姓名（显示用）
     evidence_url: string
     // 扩展字段
+    cert_type_hint?: string    // 上传前用户指定的证书类型
     issuer?: string
     certificate_number?: string
     project_name?: string
-    paper_title?: string       // 论文题目
-    journal_name?: string      // 期刊/会议名称
-    role?: string              // 承担角色
-    location?: string          // 活动/发表地点
-    team_members?: string[]    // 🔥 所有参赛学生（从OCR识别）
+    paper_title?: string
+    journal_name?: string
+    journal_level?: string
+    publish_status?: string
+    author_order?: string
+    doi?: string
+    authors?: string[]
+    first_author?: string
+    publish_date?: string
+    issn?: string
+    role?: string
+    location?: string
+    team_members?: string[]
     additional_info?: string
+    // 专利专属字段
+    patent_number?: string     // 专利号/登记号
+    patent_inventors?: string  // 发明人（顿号分隔）
+    patent_holder?: string     // 专利权人单位
   }
 }
 
@@ -369,6 +440,7 @@ const router = useRouter()
 const message = useMessage()
 const file_list = ref<FileItem[]>([])
 const show_verify_modal = ref(false)
+const default_cert_type = ref<string>('')   // '' = 自动识别
 const current_file = ref<FileItem | null>(null)
 const submitting = ref(false)
 const verify_form_ref = ref()
@@ -377,6 +449,15 @@ const current_user_name = ref('')
 const showAddStudentDialog = ref(false)  // 🔥 新增：控制添加学生对话框
 
 // 选项与规则
+// 上传前类型预选选项
+const cert_type_select_opts = [
+  { label: '竞赛类', value: 'competition' },
+  { label: '专利 / 软件著作权', value: 'patent' },
+  { label: '科研成果', value: 'research' },
+  { label: '项目类', value: 'project' },
+  { label: '荣誉证书', value: 'certificate' },
+]
+
 const category_opts = [
   { label: '竞赛类', value: 'competition' },
   { label: '科研类', value: 'research' },
@@ -397,8 +478,22 @@ const form_rules = {
   title: { required: true, message: '标题不能为空', trigger: 'blur' },
   date: { required: true, message: '日期必选', trigger: 'change', type: 'number' },
   category: { required: true, message: '类别必选', trigger: 'change' },
-  level: { required: true, message: '等级必选', trigger: 'change' },
-  award: { required: true, message: '奖项必填', trigger: 'blur' },
+  level: {
+    required: true, trigger: 'change',
+    validator: (_rule: any, value: string) => {
+      if (current_file.value?.data?.category === 'patent') return true
+      if (!value) return new Error('等级必选')
+      return true
+    }
+  },
+  award: {
+    required: true, trigger: 'blur',
+    validator: (_rule: any, value: string) => {
+      if (current_file.value?.data?.category === 'patent') return true
+      if (!value) return new Error('奖项必填')
+      return true
+    }
+  },
   teacher_id: { required: true, message: '必须关联指导教师', trigger: 'change', type: 'number' }
 }
 
@@ -445,22 +540,30 @@ const handle_batch_upload = async ({ file, onFinish }: UploadCustomRequestOption
       student_name: current_user_name.value || '加载中...',
       title: '',
       date: Date.now(),
-      category: 'competition',
+      category: default_cert_type.value === 'patent' ? 'patent'
+              : default_cert_type.value === 'research' ? 'research'
+              : default_cert_type.value === 'project' ? 'project'
+              : default_cert_type.value === 'certificate' ? 'certificate'
+              : 'competition',
       level: 'university',
       award: '',
       teacher_id: null,
-      teacher_ids: [],          // 🔥 新增：所有指导教师
-      advisors_text: '',        // 🔥 新增：教师名单文本
+      teacher_ids: [],
+      advisors_text: '',
       evidence_url: '',
+      cert_type_hint: default_cert_type.value || undefined,
       issuer: '',
       certificate_number: '',
       project_name: '',
-      paper_title: '',          // 论文题目
-      journal_name: '',         // 期刊/会议名称
-      role: '',                 // 承担角色
-      location: '',             // 活动/颁发地点
+      paper_title: '',
+      journal_name: '',
+      role: '',
+      location: '',
       team_members: [],
-      additional_info: ''
+      additional_info: '',
+      patent_number: '',
+      patent_inventors: '',
+      patent_holder: '',
     }
   }
   
@@ -489,9 +592,24 @@ const handle_batch_upload = async ({ file, onFinish }: UploadCustomRequestOption
 
 const process_ocr = async (item: FileItem) => {
   try {
-    const res = await recognizeCertificate(item.file)
-    
-    console.log('📄 OCR识别响应:', res)
+    const certTypeHint = item.data.cert_type_hint || undefined
+    let res = await recognizeCertificate(item.file, certTypeHint)
+
+    console.log('📄 OCR识别响应 (cert_type=' + (certTypeHint || 'auto') + '):', res)
+
+    // 如果未指定类型但自动检测到为专利/科研/项目，自动切换专属模板重新识别
+    if (!certTypeHint && res?.recognized_data) {
+      const autoType = res.recognized_data.suggested_type
+      const retryTypes = ['patent', 'research', 'project']
+      if (autoType && retryTypes.includes(autoType)) {
+        console.log(`🔄 自动检测为 [${autoType}]，切换专属模板重新识别...`)
+        const retryRes = await recognizeCertificate(item.file, autoType)
+        if (retryRes?.recognized_data) {
+          res = retryRes
+          item.data.cert_type_hint = autoType
+        }
+      }
+    }
     
     if (res && res.recognized_data) {
       item.status = 'success'
@@ -747,10 +865,94 @@ const process_ocr = async (item: FileItem) => {
         item.data.additional_info = raw.additional_info
         console.log('✅ additional_info:', item.data.additional_info)
       }
-      
+
+      // ========== 论文专属字段 ==========
+
+      if (raw.journal_level) {
+        item.data.journal_level = raw.journal_level
+        console.log('✅ journal_level:', item.data.journal_level)
+      }
+
+      if (raw.publish_status) {
+        item.data.publish_status = raw.publish_status
+        console.log('✅ publish_status:', item.data.publish_status)
+      }
+
+      if (raw.author_order) {
+        item.data.author_order = raw.author_order
+        console.log('✅ author_order:', item.data.author_order)
+      }
+
+      if (raw.doi) {
+        item.data.doi = raw.doi
+        console.log('✅ doi:', item.data.doi)
+      }
+
+      if (raw.authors && Array.isArray(raw.authors)) {
+        item.data.authors = raw.authors
+        console.log('✅ authors:', item.data.authors.join(', '))
+      }
+
+      if (raw.first_author) {
+        item.data.first_author = raw.first_author
+        console.log('✅ first_author:', item.data.first_author)
+      }
+
+      if (raw.publish_date) {
+        item.data.publish_date = raw.publish_date
+        console.log('✅ publish_date:', item.data.publish_date)
+      }
+
+      if (raw.issn) {
+        item.data.issn = raw.issn
+        console.log('✅ issn:', item.data.issn)
+      }
+
+      // ========== 专利专属字段 ==========
+      if (item.data.category === 'patent') {
+        // 专利号
+        item.data.patent_number = (raw.patent_number || raw.certificate_number || '') as string
+        // 发明人：优先 team_members，回退 recipient_name
+        item.data.patent_inventors = Array.isArray(raw.team_members) && raw.team_members.length
+          ? (raw.team_members as string[]).join('、')
+          : ((raw.recipient_name || '') as string)
+        // 专利权人
+        item.data.patent_holder = (raw.patent_holder || '') as string
+        // 专利类型 → 写入 award 字段（弹窗"具体奖项"即显示专利类型）
+        if (!item.data.award) {
+          item.data.award = (raw.patent_type || raw.award || '') as string
+        }
+        console.log('✅ patent_number:', item.data.patent_number)
+        console.log('✅ patent_inventors:', item.data.patent_inventors)
+        console.log('✅ patent_holder:', item.data.patent_holder)
+      }
+
       console.log('📊 字段填充完成，最终数据:', item.data)
-      
-      // 自动打开核对窗口
+
+      // ========== 路由分发：论文类跳转至论文表单 ==========
+      if (raw.document_type === 'paper') {
+        console.log('📄 检测到论文文档，跳转至论文成果填写表单')
+        const paper_ocr_data = {
+          evidence_url: item.data.evidence_url,
+          title: item.data.title || '',
+          paper_title: raw.paper_title || '',
+          journal_name: raw.journal_name || '',
+          journal_level: raw.journal_level || '',
+          publish_status: raw.publish_status || '',
+          publish_date: raw.publish_date || '',
+          authors: raw.authors || [],
+          first_author: raw.first_author || '',
+          author_order: raw.author_order || '',
+          doi: raw.doi || '',
+          issn: raw.issn || '',
+          student_name: item.data.student_name || ''
+        }
+        localStorage.setItem('ocr_paper_data', JSON.stringify(paper_ocr_data))
+        router.push('/student/achievement-collect')
+        return
+      }
+
+      // 证书类：自动打开核对窗口
       open_verify_modal(item)
       
     } else {
@@ -796,6 +998,16 @@ const get_card_status_class = (item: FileItem) => {
     'border-warning': item.status === 'error',
     'border-success': item.status === 'success'
   }
+}
+
+// 重新识别：用当前 category 作为 cert_type 重跑 OCR
+const rerun_ocr = async (item: FileItem) => {
+  if (!item.file) return
+  const certType = item.data.category || undefined
+  item.data.cert_type_hint = certType
+  item.status = 'processing'
+  await process_ocr(item)
+  message.success('重新识别完成，请核对字段')
 }
 
 // 3. 模态框逻辑

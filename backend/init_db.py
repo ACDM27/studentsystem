@@ -27,16 +27,18 @@ def seed_database():
             username="sysadmin",
             password_hash=get_password_hash("admin123"),
             role=UserRole.ADMIN,
-            avatar_url=None
+            avatar_url=None,
+            is_first_login=False
         )
         db.add(admin_user)
-        
+
         # Create test student: admin/admin (便于测试)
         test_user = SysUser(
             username="admin",
             password_hash=get_password_hash("admin"),
             role=UserRole.STUDENT,
-            avatar_url=None
+            avatar_url=None,
+            is_first_login=False
         )
         db.add(test_user)
         db.flush()  # Get user ID
@@ -60,10 +62,11 @@ def seed_database():
         
         # Create student users
         student_user1 = SysUser(
-            username="student001",
+            username="2021001",
             password_hash=get_password_hash("password123"),
             role=UserRole.STUDENT,
-            avatar_url=None
+            avatar_url=None,
+            is_first_login=False
         )
         db.add(student_user1)
         db.flush()  # Get user ID
@@ -79,10 +82,11 @@ def seed_database():
         
         # Create another student
         student_user2 = SysUser(
-            username="student002",
+            username="2021002",
             password_hash=get_password_hash("password123"),
             role=UserRole.STUDENT,
-            avatar_url=None
+            avatar_url=None,
+            is_first_login=False
         )
         db.add(student_user2)
         db.flush()

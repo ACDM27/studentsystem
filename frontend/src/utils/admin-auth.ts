@@ -2,7 +2,7 @@
  * 管理端认证工具函数
  */
 import { ElMessage } from 'element-plus'
-import router from '@/router'
+import router from '@/router/admin-index'
 
 /**
  * 检查用户是否为管理员

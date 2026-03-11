@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from database import get_db
-from schemas import LoginRequest, LoginResponse, UserInfo, RefreshTokenRequest, TokenResponse
+from schemas import LoginRequest, LoginResponse, UserInfo, RefreshTokenRequest, TokenResponse, FirstLoginRequest, ChangePasswordRequest
 from utils import success_response, error_response
-from models import SysUser, UserRole
+from models import SysUser, SysStudent, UserRole
 from auth import verify_password, create_access_token, create_refresh_token, decode_refresh_token, get_password_hash
+from dependencies import get_current_user
 
 router = APIRouter(prefix="/api/v1/auth", tags=["Authentication"])
 
@@ -51,14 +52,17 @@ async def login(request: LoginRequest, db: Session = Depends(get_db)):
         role=user.role
     )
     
+    # 判断是否使用初始密码登录：如果密码仍为 123456，提示修改
+    is_initial_password = verify_password("123456", user.password_hash)
+
     response_data = LoginResponse(
         access_token=access_token,
         refresh_token=refresh_token,
         token_type="bearer",
+        is_first_login=is_initial_password,
         userInfo=user_info
     )
-    
-    
+
     return success_response(data=response_data.model_dump())
 
 
@@ -95,6 +99,62 @@ async def refresh_token(request: RefreshTokenRequest, db: Session = Depends(get_
         access_token=new_access_token,
         token_type="bearer"
     )
-    
+
     return success_response(data=response_data.model_dump())
+
+
+@router.post("/first-login")
+async def first_login(request: FirstLoginRequest, db: Session = Depends(get_db)):
+    """
+    首次登录：使用真实姓名 + 学号验证身份，无需密码。
+    成功后返回临时 token，前端必须立即跳转至修改密码页。
+    """
+    student = db.query(SysStudent).filter(
+        SysStudent.name == request.name,
+        SysStudent.student_number == request.student_number
+    ).first()
+
+    if not student:
+        return error_response(msg="姓名或学号不正确，请核实后重试", code=401)
+
+    user = student.user
+    if not user.is_first_login:
+        return error_response(msg="该账号已完成初始化，请使用学号和密码登录", code=400)
+
+    token_data = {"sub": str(user.id), "role": user.role.value}
+    access_token = create_access_token(data=token_data)
+    refresh_token = create_refresh_token(data=token_data)
+
+    return success_response(data={
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+        "is_first_login": True,
+        "userInfo": {"id": user.id, "name": student.name, "role": user.role.value}
+    })
+
+
+@router.post("/change-password")
+async def change_password(
+    request: ChangePasswordRequest,
+    current_user: SysUser = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    设置/修改密码（首次登录必须调用）。
+    成功后 is_first_login 置为 False，username 更新为学号，
+    后续可使用 学号 + 新密码 通过 /login 正常登录。
+    """
+    if request.new_password != request.confirm_password:
+        return error_response(msg="两次密码输入不一致", code=400)
+
+    current_user.password_hash = get_password_hash(request.new_password)
+    current_user.is_first_login = False
+
+    # 统一将 username 更新为学号，便于后续用学号登录
+    if current_user.student:
+        current_user.username = current_user.student.student_number
+
+    db.commit()
+    return success_response(msg="密码设置成功，请使用学号和新密码登录")
 

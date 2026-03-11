@@ -33,6 +33,7 @@ class SysUser(Base):
     password_hash = Column(String(255), nullable=False)
     role = Column(Enum(UserRole), nullable=False)
     avatar_url = Column(String(500))
+    is_first_login = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationships

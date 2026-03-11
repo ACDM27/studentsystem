@@ -18,9 +18,9 @@ export const publicRoutes: Array<RouteRecordRaw> = [
         meta: { title: '学生登录' }
     },
     {
-        path: '/admin/login',
-        name: 'adminLogin',
-        component: () => import('../components/admin/login/AdminLogin.vue'),
-        meta: { title: '管理端登录' }
+        path: '/student/change-password',
+        name: 'studentChangePassword',
+        component: () => import('../components/student/login/ChangePassword.vue'),
+        meta: { title: '设置密码' }
     }
 ]

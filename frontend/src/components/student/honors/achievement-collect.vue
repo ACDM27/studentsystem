@@ -3,24 +3,39 @@
     <!-- 页面标题区域 -->
     <header class="header">
       <div class="header_top">
-        <n-button 
-          text 
-          size="large" 
-          @click="go_back"
-          class="back_btn"
-        >
-          <template #icon>
-            <ArrowLeft :size="20" />
-          </template>
-          返回成果展示
+        <n-button text size="large" @click="go_back" class="back_btn">
+          <template #icon><ArrowLeft :size="20" /></template>
+          {{ collect_type ? '重新选择类型' : '返回成果展示' }}
         </n-button>
       </div>
       <h1>成果收集</h1>
-      <p>填写您的成果信息，记录成长足迹</p>
+      <p>{{ collect_type === 'paper' ? '填写论文成果信息' : collect_type === 'certificate' ? '填写证书/竞赛成果信息' : '选择要收集的成果类型' }}</p>
     </header>
 
-    <!-- 表单区域 -->
-    <n-card class="form_card">
+    <!-- 步骤零：类型选择 -->
+    <div v-if="!collect_type" class="type_select">
+      <div class="type_grid">
+        <div class="type_card" @click="collect_type = 'certificate'">
+          <div class="type_icon certificate_icon">
+            <Award :size="40" />
+          </div>
+          <div class="type_title">证书 / 竞赛奖项</div>
+          <div class="type_desc">荣誉证书、获奖证书、学科竞赛、技能认证等</div>
+          <div class="type_action">开始填写 →</div>
+        </div>
+        <div class="type_card" @click="collect_type = 'paper'">
+          <div class="type_icon paper_icon">
+            <FileText :size="40" />
+          </div>
+          <div class="type_title">学术论文</div>
+          <div class="type_desc">期刊论文、会议论文等学术成果</div>
+          <div class="type_action">开始填写 →</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 证书/竞赛表单 -->
+    <n-card v-if="collect_type === 'certificate'" class="form_card">
       <n-form 
         ref="form_ref" 
         :model="form_data" 
@@ -29,6 +44,32 @@
         require-mark-placement="right-hanging"
         size="medium"
       >
+        <!-- OCR 快速识别 -->
+        <div class="form_section ocr_hint_section">
+          <h3 class="section_title"><Scan :size="20" />AI 快速识别（可选）</h3>
+          <p style="margin: 0 0 12px; color: #666; font-size: 13px;">
+            请先选择成果类别，再上传证书图片，AI 将按类型自动提取对应字段
+          </p>
+          <n-upload
+            :custom-request="handle_cert_ocr"
+            :show-file-list="false"
+            accept=".jpg,.jpeg,.png"
+            :disabled="cert_ocr_loading"
+          >
+            <n-upload-dragger class="paper_ocr_dragger">
+              <template v-if="cert_ocr_loading">
+                <n-spin size="medium" />
+                <p style="margin: 8px 0 0; color: #666">AI 识别中，请稍候…</p>
+              </template>
+              <template v-else>
+                <n-icon size="36" color="#409eff"><Scan /></n-icon>
+                <p style="margin: 8px 0 4px; font-size: 15px; font-weight: 500">上传证书图片</p>
+                <p style="margin: 0; color: #999; font-size: 13px">AI 按成果类型自动识别填写 · 支持 JPG / PNG</p>
+              </template>
+            </n-upload-dragger>
+          </n-upload>
+        </div>
+
         <!-- 基本信息区域 -->
         <div class="form_section">
           <h3 class="section_title">
@@ -88,27 +129,72 @@
             详细信息
           </h3>
           
-          <n-grid :cols="2" :x-gap="24" :y-gap="16">
+          <!-- 非专利：奖项 + 等级 -->
+          <n-grid v-if="!is_patent" :cols="2" :x-gap="24" :y-gap="16">
             <n-grid-item>
               <n-form-item label="奖项" path="award">
-                <n-select 
-                  v-model:value="form_data.award" 
-                  :options="award_opts" 
+                <n-select
+                  v-model:value="form_data.award"
+                  :options="award_opts"
                   placeholder="请选择奖项"
                 />
               </n-form-item>
             </n-grid-item>
-            
+
             <n-grid-item>
               <n-form-item label="等级" path="level">
-                <n-select 
-                  v-model:value="form_data.level" 
-                  :options="level_opts" 
+                <n-select
+                  v-model:value="form_data.level"
+                  :options="level_opts"
                   placeholder="请选择等级"
                 />
               </n-form-item>
             </n-grid-item>
           </n-grid>
+
+          <!-- 专利类专属字段 -->
+          <template v-if="is_patent">
+            <n-grid :cols="2" :x-gap="24" :y-gap="16">
+              <n-grid-item>
+                <n-form-item label="专利类型">
+                  <n-input
+                    v-model:value="form_data.patent_type"
+                    placeholder="如：发明专利 / 实用新型专利 / 软件著作权"
+                    clearable
+                  />
+                </n-form-item>
+              </n-grid-item>
+              <n-grid-item>
+                <n-form-item label="专利号 / 登记号">
+                  <n-input
+                    v-model:value="form_data.patent_number"
+                    placeholder="如：CN123456789B"
+                    clearable
+                  />
+                </n-form-item>
+              </n-grid-item>
+            </n-grid>
+            <n-grid :cols="2" :x-gap="24" :y-gap="16">
+              <n-grid-item>
+                <n-form-item label="发明人 / 著作权人">
+                  <n-input
+                    v-model:value="form_data.patent_inventors"
+                    placeholder="多人用顿号分隔，如：张三、李四"
+                    clearable
+                  />
+                </n-form-item>
+              </n-grid-item>
+              <n-grid-item>
+                <n-form-item label="专利权人 / 著作权人单位">
+                  <n-input
+                    v-model:value="form_data.patent_holder"
+                    placeholder="如：广西警察学院"
+                    clearable
+                  />
+                </n-form-item>
+              </n-grid-item>
+            </n-grid>
+          </template>
 
           <n-grid :cols="2" :x-gap="24" :y-gap="16">
             <n-grid-item>
@@ -194,22 +280,188 @@
         <div class="form_actions">
           <n-space justify="center" size="large">
             <n-button size="large" @click="reset_form">
-              <template #icon>
-                <Refresh :size="20" />
-              </template>
+              <template #icon><Refresh :size="20" /></template>
               重置表单
             </n-button>
             <n-button size="large" @click="save_draft">
-              <template #icon>
-                <Save :size="20" />
-              </template>
+              <template #icon><Save :size="20" /></template>
               保存草稿
             </n-button>
             <n-button type="primary" size="large" @click="submitAchievementForm" :loading="submitting">
-              <template #icon>
-                <Send :size="20" />
-              </template>
+              <template #icon><Send :size="20" /></template>
               提交成果
+            </n-button>
+          </n-space>
+        </div>
+      </n-form>
+    </n-card>
+
+    <!-- 论文表单 -->
+    <n-card v-if="collect_type === 'paper'" class="form_card">
+      <n-form
+        ref="paper_form_ref"
+        :model="paper_data"
+        :rules="paper_rules"
+        label-placement="top"
+        require-mark-placement="right-hanging"
+        size="medium"
+      >
+        <!-- OCR 快速识别 -->
+        <div class="form_section ocr_hint_section">
+          <h3 class="section_title"><Scan :size="20" />AI 快速识别（可选）</h3>
+          <n-upload
+            :custom-request="handle_paper_ocr"
+            :show-file-list="false"
+            accept=".jpg,.jpeg,.png"
+            :disabled="paper_ocr_loading"
+          >
+            <n-upload-dragger class="paper_ocr_dragger">
+              <template v-if="paper_ocr_loading">
+                <n-spin size="medium" />
+                <p style="margin: 8px 0 0; color: #666">AI 识别中，请稍候…</p>
+              </template>
+              <template v-else>
+                <n-icon size="36" color="#409eff"><Scan /></n-icon>
+                <p style="margin: 8px 0 4px; font-size: 15px; font-weight: 500">上传论文截图 / 录用通知图片</p>
+                <p style="margin: 0; color: #999; font-size: 13px">AI 自动识别并填写下方信息 · 支持 JPG / PNG</p>
+              </template>
+            </n-upload-dragger>
+          </n-upload>
+        </div>
+
+        <!-- 基本信息 -->
+        <div class="form_section">
+          <h3 class="section_title"><FileText :size="20" />基本信息</h3>
+          <n-grid :cols="2" :x-gap="24" :y-gap="16">
+            <n-grid-item>
+              <n-form-item label="学号" path="student_id">
+                <n-input v-model:value="paper_data.student_id" disabled />
+              </n-form-item>
+            </n-grid-item>
+            <n-grid-item>
+              <n-form-item label="姓名" path="name">
+                <n-input v-model:value="paper_data.name" disabled />
+              </n-form-item>
+            </n-grid-item>
+          </n-grid>
+        </div>
+
+        <!-- 论文信息 -->
+        <div class="form_section">
+          <h3 class="section_title"><Award :size="20" />论文信息</h3>
+          <n-grid :cols="1" :x-gap="24" :y-gap="16">
+            <n-grid-item>
+              <n-form-item label="论文题目" path="paper_title">
+                <n-input v-model:value="paper_data.paper_title" placeholder="请输入完整论文题目" clearable />
+              </n-form-item>
+            </n-grid-item>
+          </n-grid>
+          <n-grid :cols="2" :x-gap="24" :y-gap="16">
+            <n-grid-item>
+              <n-form-item label="期刊 / 会议名称" path="journal_name">
+                <n-input v-model:value="paper_data.journal_name" placeholder="请输入期刊或会议全称" clearable />
+              </n-form-item>
+            </n-grid-item>
+            <n-grid-item>
+              <n-form-item label="期刊级别" path="journal_level">
+                <n-select v-model:value="paper_data.journal_level" :options="journal_level_opts" placeholder="请选择期刊级别" />
+              </n-form-item>
+            </n-grid-item>
+          </n-grid>
+          <n-grid :cols="2" :x-gap="24" :y-gap="16">
+            <n-grid-item>
+              <n-form-item label="发表状态" path="publish_status">
+                <n-select v-model:value="paper_data.publish_status" :options="publish_status_opts" placeholder="请选择发表状态" />
+              </n-form-item>
+            </n-grid-item>
+            <n-grid-item>
+              <n-form-item label="发表 / 录用时间" path="publish_date">
+                <n-date-picker
+                  v-model:value="paper_data.publish_date"
+                  type="date"
+                  placeholder="选择日期"
+                  clearable
+                  style="width: 100%"
+                />
+              </n-form-item>
+            </n-grid-item>
+          </n-grid>
+          <n-grid :cols="2" :x-gap="24" :y-gap="16">
+            <n-grid-item>
+              <n-form-item label="作者排序" path="author_order">
+                <n-select v-model:value="paper_data.author_order" :options="author_order_opts" placeholder="请选择作者排序" />
+              </n-form-item>
+            </n-grid-item>
+            <n-grid-item>
+              <n-form-item label="DOI（选填）" path="doi">
+                <n-input v-model:value="paper_data.doi" placeholder="如 10.1016/j.xxx.2024.01.001" clearable />
+              </n-form-item>
+            </n-grid-item>
+          </n-grid>
+        </div>
+
+        <!-- 导师信息 -->
+        <div class="form_section">
+          <h3 class="section_title"><FileText :size="20" />导师信息</h3>
+          <n-grid :cols="2" :x-gap="24" :y-gap="16">
+            <n-grid-item>
+              <n-form-item label="导师所属学院" path="tutor_department">
+                <n-select
+                  v-model:value="paper_data.tutor_department"
+                  :options="department_opts"
+                  placeholder="请选择所属学院"
+                  @update:value="handle_paper_department_change"
+                  clearable
+                />
+              </n-form-item>
+            </n-grid-item>
+            <n-grid-item>
+              <n-form-item label="导师姓名" path="tutor_name">
+                <n-select
+                  v-model:value="paper_data.tutor_name"
+                  :options="filtered_teacher_opts"
+                  placeholder="请先选择学院，再选择导师"
+                  :disabled="!paper_data.tutor_department"
+                  clearable
+                  filterable
+                />
+              </n-form-item>
+            </n-grid-item>
+          </n-grid>
+        </div>
+
+        <!-- 附件上传 -->
+        <div class="form_section">
+          <h3 class="section_title"><Upload :size="20" />附件上传</h3>
+          <n-form-item label="录用通知 / 发表页截图（选填）" path="attachments">
+            <n-upload
+              v-model:file-list="paper_data.attachments"
+              multiple
+              :max="5"
+              list-type="text"
+              @before-upload="before_upload"
+            >
+              <n-upload-dragger>
+                <div style="margin-bottom: 12px">
+                  <n-icon size="48" :depth="3"><Upload /></n-icon>
+                </div>
+                <n-text style="font-size: 16px">点击或拖动文件到此处上传</n-text>
+                <n-p depth="3" style="margin: 8px 0 0 0">支持 PDF、图片、Word，最多 5 个文件</n-p>
+              </n-upload-dragger>
+            </n-upload>
+          </n-form-item>
+        </div>
+
+        <!-- 操作按钮 -->
+        <div class="form_actions">
+          <n-space justify="center" size="large">
+            <n-button size="large" @click="reset_paper_form">
+              <template #icon><Refresh :size="20" /></template>
+              重置表单
+            </n-button>
+            <n-button type="primary" size="large" @click="submit_paper_form" :loading="submitting">
+              <template #icon><Send :size="20" /></template>
+              提交论文成果
             </n-button>
           </n-space>
         </div>
@@ -230,12 +482,14 @@ import {
   IconRefresh as Refresh,
   IconDeviceFloppy as Save,
   IconSend as Send,
-  IconArrowLeft as ArrowLeft
+  IconArrowLeft as ArrowLeft,
+  IconScan as Scan
 } from '@tabler/icons-vue'
 import {
   submitAchievement,
   getTeachers,
-  getStudentMe
+  getStudentMe,
+  recognizeCertificate
 } from '@/api'
 
 // === API 适配器 ===
@@ -293,11 +547,19 @@ const fetchTeacherDepartments = async (): Promise<any> => {
 const router = useRouter()
 const message = useMessage()
 
+// 当前选中的成果类型：null = 未选 | 'certificate' = 证书/竞赛 | 'paper' = 学术论文
+const collect_type = ref<null | 'certificate' | 'paper'>(null)
+
 // 表单引用
 const form_ref = ref<FormInst | null>(null)
+const paper_form_ref = ref<FormInst | null>(null)
 
 // 提交状态
 const submitting = ref(false)
+
+// 论文 OCR 识别状态
+const paper_ocr_loading = ref(false)
+const cert_ocr_loading = ref(false)
 
 // 表单数据
 const form_data = ref({
@@ -310,8 +572,16 @@ const form_data = ref({
   title: '',
   tutor_department: '', // 导师所属学院
   tutor_name: '', // 导师姓名
-  attachments: [] as UploadFileInfo[]
+  attachments: [] as UploadFileInfo[],
+  // 专利专属字段
+  patent_number: '',     // 专利号
+  patent_type: '',       // 专利类型（发明/实用新型/外观设计/软件著作权）
+  patent_inventors: '',  // 发明人（逗号分隔）
+  patent_holder: '',     // 专利权人
 })
+
+// 是否为专利类别
+const is_patent = computed(() => form_data.value.category === '5')
 
 // 表单验证规则
 const form_rules = {
@@ -335,10 +605,26 @@ const form_rules = {
     { required: true, message: '请选择成果类别', trigger: 'change' }
   ],
   award: [
-    { required: true, message: '请选择奖项', trigger: 'change' }
+    {
+      required: true,
+      trigger: 'change',
+      validator: (_rule: any, value: string) => {
+        if (is_patent.value) return true // 专利类别不要求奖项
+        if (!value) return new Error('请选择奖项')
+        return true
+      }
+    }
   ],
   level: [
-    { required: true, message: '请选择等级', trigger: 'change' }
+    {
+      required: true,
+      trigger: 'change',
+      validator: (_rule: any, value: string) => {
+        if (is_patent.value) return true // 专利类别不要求等级
+        if (!value) return new Error('请选择等级')
+        return true
+      }
+    }
   ],
   date: [
     { 
@@ -365,6 +651,56 @@ const form_rules = {
     { required: true, message: '请选择导师姓名', trigger: 'change' }
   ]
 }
+
+// ========== 论文表单数据 ==========
+const paper_data = ref({
+  student_id: '',
+  name: '',
+  paper_title: '',
+  journal_name: '',
+  journal_level: '',
+  publish_status: '',
+  publish_date: null as number | null,
+  author_order: '',
+  doi: '',
+  issn: '',
+  tutor_department: '',
+  tutor_name: '',
+  evidence_url: '',
+  attachments: [] as UploadFileInfo[]
+})
+
+const paper_rules = {
+  paper_title: [{ required: true, message: '请输入论文题目', trigger: 'blur' }],
+  journal_name: [{ required: true, message: '请输入期刊/会议名称', trigger: 'blur' }],
+  journal_level: [{ required: true, message: '请选择期刊级别', trigger: 'change' }],
+  publish_status: [{ required: true, message: '请选择发表状态', trigger: 'change' }],
+  author_order: [{ required: true, message: '请选择作者排序', trigger: 'change' }],
+  tutor_department: [{ required: true, message: '请选择导师所属学院', trigger: 'change' }],
+  tutor_name: [{ required: true, message: '请选择导师姓名', trigger: 'change' }]
+}
+
+const journal_level_opts = [
+  { label: 'SCI', value: 'SCI' },
+  { label: 'EI', value: 'EI' },
+  { label: '北大核心', value: '北大核心' },
+  { label: '南大核心（CSSCI）', value: 'CSSCI' },
+  { label: '普通期刊', value: '普通期刊' },
+  { label: '会议论文', value: '会议论文' }
+]
+
+const publish_status_opts = [
+  { label: '已发表', value: 'published' },
+  { label: '录用待刊', value: 'accepted' },
+  { label: '在审中', value: 'under_review' }
+]
+
+const author_order_opts = [
+  { label: '第一作者', value: '第一作者' },
+  { label: '通讯作者', value: '通讯作者' },
+  { label: '第二作者', value: '第二作者' },
+  { label: '第三作者及以后', value: '其他作者' }
+]
 
 // 选项配置 - 保留数字值，映射为后端字段值
 const category_opts = [
@@ -434,7 +770,197 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024
 
 // 方法
 const go_back = () => {
-  router.push('/student/achievement')
+  if (collect_type.value) {
+    collect_type.value = null
+  } else {
+    router.push('/student/achievement')
+  }
+}
+
+const handle_paper_department_change = async (value: string) => {
+  paper_data.value.tutor_name = ''
+  if (value) await fetch_teachers_by_department(value)
+}
+
+const reset_paper_form = () => {
+  paper_form_ref.value?.restoreValidation()
+  const { student_id, name } = paper_data.value
+  Object.assign(paper_data.value, {
+    student_id, name,
+    paper_title: '', journal_name: '', journal_level: '',
+    publish_status: '', publish_date: null, author_order: '',
+    doi: '', tutor_department: '', tutor_name: '', attachments: []
+  })
+  message.success('表单已重置')
+}
+
+// ========== 论文表单内嵌 OCR ==========
+const handle_paper_ocr = async ({ file, onFinish, onError }: any) => {
+  if (!file.file) { onError(); return }
+  paper_ocr_loading.value = true
+  try {
+    const res = await recognizeCertificate(file.file)
+    const raw = res?.recognized_data
+
+    if (!raw) {
+      message.error('识别失败，请手动填写或更换图片')
+      onError()
+      return
+    }
+
+    if (raw.document_type === 'certificate') {
+      message.warning('检测到证书类文件，请确认图片是否为论文截图/录用通知')
+    }
+
+    const publishStatusMap: Record<string, string> = {
+      '已发表': 'published',
+      '录用待刊': 'accepted',
+      '在审中': 'under_review'
+    }
+
+    if (raw.paper_title)   paper_data.value.paper_title   = raw.paper_title
+    if (raw.journal_name)  paper_data.value.journal_name  = raw.journal_name
+    if (raw.journal_level) paper_data.value.journal_level = raw.journal_level
+    if (raw.publish_status) paper_data.value.publish_status = publishStatusMap[raw.publish_status] || raw.publish_status
+    if (raw.author_order)  paper_data.value.author_order  = raw.author_order
+    if (raw.doi)           paper_data.value.doi           = raw.doi
+    if (raw.issn)          paper_data.value.issn          = raw.issn
+    if (res.file_url)      paper_data.value.evidence_url  = res.file_url
+
+    if (raw.publish_date) {
+      const d = new Date(raw.publish_date)
+      if (!isNaN(d.getTime())) paper_data.value.publish_date = d.getTime()
+    }
+
+    message.success('识别完成，请核对信息并补充导师')
+    onFinish()
+  } catch (e: any) {
+    message.error(e.message || 'OCR 识别出错')
+    onError()
+  } finally {
+    paper_ocr_loading.value = false
+  }
+}
+
+// ========== 证书表单 OCR（按成果类型路由） ==========
+const handle_cert_ocr = async ({ file, onFinish, onError }: any) => {
+  if (!file.file) { onError(); return }
+
+  // 将前端 category value 映射到后端 cert_type
+  const categoryBackendMap: Record<string, string> = {
+    '1': 'competition',
+    '2': 'research',
+    '3': 'project',
+    '5': 'patent',
+    '6': 'certificate',
+  }
+  const certType = categoryBackendMap[form_data.value.category] || 'certificate'
+
+  cert_ocr_loading.value = true
+  try {
+    const res = await recognizeCertificate(file.file, certType)
+    const raw = res?.recognized_data
+
+    if (!raw) {
+      message.error('识别失败，请手动填写或更换图片')
+      onError()
+      return
+    }
+
+    // 通用字段填充
+    if (raw.title)    form_data.value.title = raw.title
+    if (raw.issue_date || raw.date) {
+      const dateStr = (raw.issue_date || raw.date) as string
+      const d = new Date(dateStr)
+      if (!isNaN(d.getTime())) form_data.value.date = d.getTime()
+    }
+
+    if (certType === 'patent') {
+      // 专利专属字段映射
+      form_data.value.patent_type      = (raw.patent_type || raw.award || '') as string
+      form_data.value.patent_number    = (raw.patent_number || raw.certificate_number || '') as string
+      form_data.value.patent_inventors = Array.isArray(raw.team_members) && raw.team_members.length
+        ? (raw.team_members as string[]).join('、')
+        : ((raw.recipient_name || '') as string)
+      form_data.value.patent_holder    = (raw.patent_holder || '') as string
+    } else {
+      // 非专利：填充奖项和等级
+      if (raw.award) form_data.value.award = raw.award
+      if (raw.award_level) {
+        const levelMap: Record<string, string> = {
+          '国家级': '国家级', '省部级': '省部级', '校级': '校级', '院级': '院级'
+        }
+        const matched = Object.keys(levelMap).find(k => (raw.award_level || '').includes(k))
+        if (matched) form_data.value.level = levelMap[matched]
+      }
+    }
+
+    // 类型专属提示
+    const typeHints: Record<string, string> = {
+      competition: `竞赛识别完成：${raw.certificate_name || ''}${raw.award ? ' · ' + raw.award : ''}`,
+      patent: `专利识别完成：${raw.patent_name || raw.certificate_name || ''}（${form_data.value.patent_type}）`,
+      research: `科研成果识别完成：${raw.achievement_name || raw.certificate_name || ''}`,
+      project: `项目识别完成：${raw.project_name || raw.certificate_name || ''}`,
+      certificate: `证书识别完成：${raw.certificate_name || ''}`,
+    }
+    message.success((typeHints[certType] || '识别完成') + '，请核对信息')
+    onFinish()
+  } catch (e: any) {
+    message.error(e.message || 'OCR 识别出错')
+    onError()
+  } finally {
+    cert_ocr_loading.value = false
+  }
+}
+
+const submit_paper_form = async () => {
+  try {
+    await paper_form_ref.value?.validate()
+    submitting.value = true
+
+    const selectedTeacher = filtered_teacher_opts.value.find(
+      t => t.value === paper_data.value.tutor_name
+    )
+    const teacherId = selectedTeacher?.teacher_id ? Number(selectedTeacher.teacher_id) : null
+    if (!teacherId) throw new Error('请选择有效的导师')
+
+    const publish_date_str = paper_data.value.publish_date
+      ? (() => {
+          const d = new Date(paper_data.value.publish_date!)
+          return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+        })()
+      : ''
+
+    await submitAchievement({
+      teacher_id: teacherId,
+      title: paper_data.value.paper_title,
+      type: 'paper',
+      content_json: {
+        paper_title: paper_data.value.paper_title,
+        journal_name: paper_data.value.journal_name,
+        journal_level: paper_data.value.journal_level,
+        publish_status: paper_data.value.publish_status,
+        publish_date: publish_date_str,
+        author_order: paper_data.value.author_order,
+        doi: paper_data.value.doi,
+        issn: paper_data.value.issn,
+        tutor_department: paper_data.value.tutor_department,
+        tutor_name: paper_data.value.tutor_name
+      },
+      evidence_url: paper_data.value.evidence_url || ''
+    })
+
+    message.success('论文成果提交成功！')
+    router.push('/student/achievement')
+  } catch (error: any) {
+    if (error.name === 'ValidationError') {
+      message.error('请完善必填信息后再提交')
+    } else {
+      message.error(error.message || '提交失败，请重试')
+    }
+  } finally {
+    submitting.value = false
+  }
 }
 
 const handle_date_change = (value: number | null) => {
@@ -748,7 +1274,11 @@ const reset_form = () => {
     title: '',
     tutor_department: '',
     tutor_name: '',
-    attachments: []
+    attachments: [],
+    patent_number: '',
+    patent_type: '',
+    patent_inventors: '',
+    patent_holder: '',
   })
   message.success('表单已重置')
 }
@@ -785,23 +1315,31 @@ const submitAchievementForm = async () => {
     const categoryBackendValue = selectedCategoryOption ? selectedCategoryOption.backendValue : '';
 
     // 构建符合后端API要求的提交数据格式
+    const dateStr = form_data.value.date ? (() => {
+      const d = new Date(form_data.value.date)
+      const yyyy = d.getFullYear()
+      const mm = String(d.getMonth() + 1).padStart(2, '0')
+      const dd = String(d.getDate()).padStart(2, '0')
+      return `${yyyy}-${mm}-${dd}`
+    })() : ''
+
     const submit_data = {
       data: {
         student_id: form_data.value.student_id.trim(),
         name: form_data.value.name.trim(),
         category: categoryBackendValue,  // 使用映射后的值
-        award: form_data.value.award,
+        award: is_patent.value ? form_data.value.patent_type : form_data.value.award,
         level: form_data.value.level,
-        date: form_data.value.date ? (() => {
-          const d = new Date(form_data.value.date)
-          const yyyy = d.getFullYear()
-          const mm = String(d.getMonth() + 1).padStart(2, '0')
-          const dd = String(d.getDate()).padStart(2, '0')
-          return `${yyyy}-${mm}-${dd}`
-        })() : '',
+        date: dateStr,
         title: form_data.value.title.trim(),
         tutor_department: form_data.value.tutor_department,
         tutor_name: form_data.value.tutor_name,
+        // 专利专属字段（category 为 patent 时有值）
+        ...(is_patent.value ? {
+          patent_number: form_data.value.patent_number,
+          patent_inventors: form_data.value.patent_inventors,
+          patent_holder: form_data.value.patent_holder,
+        } : {})
       }
     }
     
@@ -881,6 +1419,8 @@ const loadCurrentStudentInfo = async () => {
     if (studentInfo) {
       form_data.value.student_id = studentInfo.student_id || ''
       form_data.value.name = studentInfo.name || ''
+      paper_data.value.student_id = studentInfo.student_id || ''
+      paper_data.value.name = studentInfo.name || ''
       console.log('已自动填入学生信息:', { student_id: studentInfo.student_id, name: studentInfo.name })
     }
   } catch (error) {
@@ -892,6 +1432,8 @@ const loadCurrentStudentInfo = async () => {
         const userInfo = JSON.parse(userInfoStr)
         form_data.value.student_id = userInfo.student_id || ''
         form_data.value.name = userInfo.name || ''
+        paper_data.value.student_id = userInfo.student_id || ''
+        paper_data.value.name = userInfo.name || ''
         console.log('已从本地存储填入学生信息')
       }
     } catch (e) {
@@ -907,6 +1449,42 @@ onMounted(() => {
 
   // 2. 自动填入当前登录学生的信息
   loadCurrentStudentInfo()
+
+  // 3. 检查是否有来自 OCR 的论文识别数据（两阶段OCR: paper路径）
+  try {
+    const ocrPaperStr = localStorage.getItem('ocr_paper_data')
+    if (ocrPaperStr) {
+      localStorage.removeItem('ocr_paper_data')
+      const ocrData = JSON.parse(ocrPaperStr)
+      collect_type.value = 'paper'
+
+      const publishStatusMap: Record<string, string> = {
+        '已发表': 'published',
+        '录用待刊': 'accepted',
+        '在审中': 'under_review'
+      }
+
+      paper_data.value.paper_title = ocrData.paper_title || ''
+      paper_data.value.journal_name = ocrData.journal_name || ''
+      paper_data.value.journal_level = ocrData.journal_level || ''
+      paper_data.value.publish_status = publishStatusMap[ocrData.publish_status] || ''
+      paper_data.value.author_order = ocrData.author_order || ''
+      paper_data.value.doi = ocrData.doi || ''
+      paper_data.value.evidence_url = ocrData.evidence_url || ''
+
+      if (ocrData.publish_date) {
+        const d = new Date(ocrData.publish_date)
+        if (!isNaN(d.getTime())) {
+          paper_data.value.publish_date = d.getTime()
+        }
+      }
+
+      message.success('已自动填入论文OCR识别信息，请核对内容并补充导师信息')
+      console.log('✅ 已从OCR预填论文数据:', ocrData)
+    }
+  } catch (e) {
+    console.error('读取OCR论文数据失败:', e)
+  }
 
   // 页面初始化，不再预加载所有教师数据
   // 教师数据将在用户选择学院时按需加载
@@ -1001,6 +1579,24 @@ onMounted(() => {
   color: #333;
 }
 
+.ocr_hint_section {
+  background: #f0f7ff;
+  border-radius: 8px;
+  padding: 16px 20px 20px;
+  border: 1px dashed #91caff;
+}
+
+.paper_ocr_dragger {
+  min-height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  padding: 20px;
+  background: #fff;
+  border-radius: 6px;
+}
+
 .form_actions {
   margin-top: 32px;
   padding-top: 24px;
@@ -1061,5 +1657,72 @@ onMounted(() => {
 
 :deep(.n-date-picker) {
   width: 100%;
+}
+/* ========== 类型选择 ========== */
+.type_select {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.type_grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+.type_card {
+  background: #fff;
+  border: 2px solid #e8eaf6;
+  border-radius: 12px;
+  padding: 40px 32px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.type_card:hover {
+  border-color: #409eff;
+  box-shadow: 0 8px 24px rgba(64, 158, 255, 0.15);
+  transform: translateY(-4px);
+}
+
+.type_icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  margin-bottom: 20px;
+}
+
+.certificate_icon {
+  background: linear-gradient(135deg, #fff3e0, #ffe0b2);
+  color: #f57c00;
+}
+
+.paper_icon {
+  background: linear-gradient(135deg, #e3f2fd, #bbdefb);
+  color: #1976d2;
+}
+
+.type_title {
+  font-size: 20px;
+  font-weight: 700;
+  color: #333;
+  margin-bottom: 12px;
+}
+
+.type_desc {
+  font-size: 14px;
+  color: #888;
+  line-height: 1.6;
+  margin-bottom: 20px;
+}
+
+.type_action {
+  font-size: 14px;
+  color: #409eff;
+  font-weight: 600;
 }
 </style>

@@ -58,11 +58,24 @@ class UserInfo(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class FirstLoginRequest(BaseModel):
+    """First-time login: verify by real name + student number (no password needed)"""
+    name: str = Field(..., min_length=1, max_length=50, description="学生真实姓名")
+    student_number: str = Field(..., min_length=1, max_length=20, description="学号")
+
+
+class ChangePasswordRequest(BaseModel):
+    """Set/change password after first login"""
+    new_password: str = Field(..., min_length=6, max_length=128)
+    confirm_password: str = Field(..., min_length=6, max_length=128)
+
+
 class LoginResponse(BaseModel):
     """Login response with dual tokens"""
     access_token: str = Field(..., description="Short-lived access token for API requests")
     refresh_token: str = Field(..., description="Long-lived refresh token for renewing access")
     token_type: str = Field(default="bearer", description="Token type")
+    is_first_login: bool = Field(default=False)
     userInfo: UserInfo
 
 

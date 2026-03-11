@@ -20,6 +20,7 @@ declare module 'vue' {
     Assignments: typeof import('./src/components/student/assignments/assignments.vue')['default']
     AuditDialog: typeof import('./src/components/admin/achievement/AuditDialog.vue')['default']
     CertificateOcr: typeof import('./src/components/student/honors/CertificateOcr.vue')['default']
+    ChangePassword: typeof import('./src/components/student/login/ChangePassword.vue')['default']
     CollegeActivity: typeof import('./src/components/student/activities/college-activity.vue')['default']
     Consulting: typeof import('./src/components/student/consulting/consulting.vue')['default']
     CoursesPage: typeof import('./src/components/student/courses/CoursesPage.vue')['default']

@@ -94,11 +94,14 @@ export function getStudentProfile(): Promise<any> {
  * 证书OCR识别（步骤1：上传并识别）
  * POST /api/v1/student/ocr/recognize
  */
-export function recognizeCertificate(file: File): Promise<CertificateRecognitionResponse> {
+export function recognizeCertificate(file: File, certType?: string): Promise<CertificateRecognitionResponse> {
     const formData = new FormData()
     formData.append('file', file)
+    if (certType) {
+        formData.append('cert_type', certType)
+    }
     return request.post('/api/v1/student/ocr/recognize', formData, {
-        timeout: 60000 // OCR识别可能需要更长时间
+        timeout: 60000
     })
 }
 

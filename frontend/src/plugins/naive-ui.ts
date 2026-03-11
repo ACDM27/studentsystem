@@ -44,6 +44,7 @@ import {
   NSelect,
   NRadio,
   NRadioGroup,
+  NRadioButton,
   NCheckbox,
   NCheckboxGroup,
   NSwitch,
@@ -51,7 +52,8 @@ import {
   NTimePicker,
   NSlider,
   NUpload,
-  
+  NUploadDragger,
+
   // 数据展示组件
   NTable,
   NList,
@@ -131,6 +133,7 @@ const naive = create({
     NSelect,
     NRadio,
     NRadioGroup,
+    NRadioButton,
     NCheckbox,
     NCheckboxGroup,
     NSwitch,
@@ -138,7 +141,8 @@ const naive = create({
     NTimePicker,
     NSlider,
     NUpload,
-    
+    NUploadDragger,
+
     // 数据展示组件
     NTable,
     NList,
