@@ -9,7 +9,7 @@
         </n-button>
       </div>
       <h1>成果收集</h1>
-      <p>{{ collect_type === 'paper' ? '填写论文成果信息' : collect_type === 'certificate' ? '填写证书/竞赛成果信息' : '选择要收集的成果类型' }}</p>
+      <p>{{ collect_type === 'paper' ? '填写论文成果信息' : collect_type === 'patent' ? '填写专利成果信息' : collect_type === 'certificate' ? '填写证书/竞赛成果信息' : '选择要收集的成果类型' }}</p>
     </header>
 
     <!-- 步骤零：类型选择 -->
@@ -29,6 +29,14 @@
           </div>
           <div class="type_title">学术论文</div>
           <div class="type_desc">期刊论文、会议论文等学术成果</div>
+          <div class="type_action">开始填写 →</div>
+        </div>
+        <div class="type_card" @click="collect_type = 'patent'">
+          <div class="type_icon patent_icon">
+            <Bulb :size="40" />
+          </div>
+          <div class="type_title">专利 / 软件著作权</div>
+          <div class="type_desc">发明专利、实用新型专利、外观设计专利、软件著作权等</div>
           <div class="type_action">开始填写 →</div>
         </div>
       </div>
@@ -433,7 +441,7 @@
         <!-- 附件上传 -->
         <div class="form_section">
           <h3 class="section_title"><Upload :size="20" />附件上传</h3>
-          <n-form-item label="录用通知 / 发表页截图（选填）" path="attachments">
+          <n-form-item label="录用通知 / 发表页截图" path="attachments">
             <n-upload
               v-model:file-list="paper_data.attachments"
               multiple
@@ -452,6 +460,15 @@
           </n-form-item>
         </div>
 
+        <!-- 诚信承诺 -->
+        <div class="form_section integrity_section">
+          <n-form-item path="integrity_pledge" :show-label="false">
+            <n-checkbox v-model:checked="paper_data.integrity_pledge">
+              <span class="integrity_text">本人承诺以上填写的论文信息真实有效，如有造假愿承担相应责任，包括成果积分清零并记入信用档案。</span>
+            </n-checkbox>
+          </n-form-item>
+        </div>
+
         <!-- 操作按钮 -->
         <div class="form_actions">
           <n-space justify="center" size="large">
@@ -459,9 +476,190 @@
               <template #icon><Refresh :size="20" /></template>
               重置表单
             </n-button>
-            <n-button type="primary" size="large" @click="submit_paper_form" :loading="submitting">
+            <n-button type="primary" size="large" @click="submit_paper_form" :loading="submitting" :disabled="!paper_data.integrity_pledge">
               <template #icon><Send :size="20" /></template>
               提交论文成果
+            </n-button>
+          </n-space>
+        </div>
+      </n-form>
+    </n-card>
+
+    <!-- 专利表单 -->
+    <n-card v-if="collect_type === 'patent'" class="form_card">
+      <n-form
+        ref="patent_form_ref"
+        :model="patent_data"
+        :rules="patent_rules"
+        label-placement="top"
+        require-mark-placement="right-hanging"
+        size="medium"
+      >
+        <!-- OCR 快速识别 -->
+        <div class="form_section ocr_hint_section">
+          <h3 class="section_title"><Scan :size="20" />AI 快速识别（可选）</h3>
+          <n-upload
+            :custom-request="handle_patent_ocr"
+            :show-file-list="false"
+            accept=".jpg,.jpeg,.png"
+            :disabled="patent_ocr_loading"
+          >
+            <n-upload-dragger class="paper_ocr_dragger">
+              <template v-if="patent_ocr_loading">
+                <n-spin size="medium" />
+                <p style="margin: 8px 0 0; color: #666">AI 识别中，请稍候…</p>
+              </template>
+              <template v-else>
+                <n-icon size="36" color="#409eff"><Scan /></n-icon>
+                <p style="margin: 8px 0 4px; font-size: 15px; font-weight: 500">上传专利证书 / 受理通知书图片</p>
+                <p style="margin: 0; color: #999; font-size: 13px">AI 自动识别并填写下方信息 · 支持 JPG / PNG</p>
+              </template>
+            </n-upload-dragger>
+          </n-upload>
+        </div>
+
+        <!-- 基本信息 -->
+        <div class="form_section">
+          <h3 class="section_title"><FileText :size="20" />基本信息</h3>
+          <n-grid :cols="2" :x-gap="24" :y-gap="16">
+            <n-grid-item>
+              <n-form-item label="学号" path="student_id">
+                <n-input v-model:value="patent_data.student_id" disabled />
+              </n-form-item>
+            </n-grid-item>
+            <n-grid-item>
+              <n-form-item label="姓名" path="name">
+                <n-input v-model:value="patent_data.name" disabled />
+              </n-form-item>
+            </n-grid-item>
+          </n-grid>
+        </div>
+
+        <!-- 专利信息 -->
+        <div class="form_section">
+          <h3 class="section_title"><Bulb :size="20" />专利信息</h3>
+          <n-grid :cols="1" :x-gap="24" :y-gap="16">
+            <n-grid-item>
+              <n-form-item label="专利 / 著作权名称" path="patent_title">
+                <n-input v-model:value="patent_data.patent_title" placeholder="请输入专利或软件著作权的完整名称" clearable />
+              </n-form-item>
+            </n-grid-item>
+          </n-grid>
+          <n-grid :cols="2" :x-gap="24" :y-gap="16">
+            <n-grid-item>
+              <n-form-item label="专利类型" path="patent_type">
+                <n-select v-model:value="patent_data.patent_type" :options="patent_type_opts" placeholder="请选择专利类型" />
+              </n-form-item>
+            </n-grid-item>
+            <n-grid-item>
+              <n-form-item label="专利号 / 登记号" path="patent_number">
+                <n-input v-model:value="patent_data.patent_number" placeholder="如：CN123456789B、2024SR0123456" clearable />
+              </n-form-item>
+            </n-grid-item>
+          </n-grid>
+          <n-grid :cols="2" :x-gap="24" :y-gap="16">
+            <n-grid-item>
+              <n-form-item label="专利状态" path="patent_status">
+                <n-select v-model:value="patent_data.patent_status" :options="patent_status_opts" placeholder="请选择当前状态" />
+              </n-form-item>
+            </n-grid-item>
+            <n-grid-item>
+              <n-form-item label="授权 / 登记日期" path="patent_date">
+                <n-date-picker
+                  v-model:value="patent_data.patent_date"
+                  type="date"
+                  placeholder="选择日期"
+                  clearable
+                  style="width: 100%"
+                />
+              </n-form-item>
+            </n-grid-item>
+          </n-grid>
+          <n-grid :cols="2" :x-gap="24" :y-gap="16">
+            <n-grid-item>
+              <n-form-item label="发明人 / 著作权人" path="patent_inventors">
+                <n-input v-model:value="patent_data.patent_inventors" placeholder="多人用顿号分隔，如：张三、李四" clearable />
+              </n-form-item>
+            </n-grid-item>
+            <n-grid-item>
+              <n-form-item label="专利权人 / 著作权人单位" path="patent_holder">
+                <n-input v-model:value="patent_data.patent_holder" placeholder="如：广西警察学院" clearable />
+              </n-form-item>
+            </n-grid-item>
+          </n-grid>
+        </div>
+
+        <!-- 导师信息 -->
+        <div class="form_section">
+          <h3 class="section_title"><FileText :size="20" />导师信息</h3>
+          <n-grid :cols="2" :x-gap="24" :y-gap="16">
+            <n-grid-item>
+              <n-form-item label="导师所属学院" path="tutor_department">
+                <n-select
+                  v-model:value="patent_data.tutor_department"
+                  :options="department_opts"
+                  placeholder="请选择所属学院"
+                  @update:value="handle_patent_department_change"
+                  clearable
+                />
+              </n-form-item>
+            </n-grid-item>
+            <n-grid-item>
+              <n-form-item label="导师姓名" path="tutor_name">
+                <n-select
+                  v-model:value="patent_data.tutor_name"
+                  :options="filtered_teacher_opts"
+                  placeholder="请先选择学院，再选择导师"
+                  :disabled="!patent_data.tutor_department"
+                  clearable
+                  filterable
+                />
+              </n-form-item>
+            </n-grid-item>
+          </n-grid>
+        </div>
+
+        <!-- 附件上传 -->
+        <div class="form_section">
+          <h3 class="section_title"><Upload :size="20" />附件上传</h3>
+          <n-form-item label="专利证书 / 受理通知书（选填）" path="attachments">
+            <n-upload
+              v-model:file-list="patent_data.attachments"
+              multiple
+              :max="5"
+              list-type="text"
+              @before-upload="before_upload"
+            >
+              <n-upload-dragger>
+                <div style="margin-bottom: 12px">
+                  <n-icon size="48" :depth="3"><Upload /></n-icon>
+                </div>
+                <n-text style="font-size: 16px">点击或拖动文件到此处上传</n-text>
+                <n-p depth="3" style="margin: 8px 0 0 0">支持 PDF、图片、Word，最多 5 个文件</n-p>
+              </n-upload-dragger>
+            </n-upload>
+          </n-form-item>
+        </div>
+
+        <!-- 诚信承诺 -->
+        <div class="form_section integrity_section">
+          <n-form-item path="integrity_pledge" :show-label="false">
+            <n-checkbox v-model:checked="patent_data.integrity_pledge">
+              <span class="integrity_text">本人承诺以上填写的专利信息真实有效，如有造假愿承担相应责任，包括成果积分清零并记入信用档案。</span>
+            </n-checkbox>
+          </n-form-item>
+        </div>
+
+        <!-- 操作按钮 -->
+        <div class="form_actions">
+          <n-space justify="center" size="large">
+            <n-button size="large" @click="reset_patent_form">
+              <template #icon><Refresh :size="20" /></template>
+              重置表单
+            </n-button>
+            <n-button type="primary" size="large" @click="submit_patent_form" :loading="submitting" :disabled="!patent_data.integrity_pledge">
+              <template #icon><Send :size="20" /></template>
+              提交专利成果
             </n-button>
           </n-space>
         </div>
@@ -473,7 +671,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { useMessage } from 'naive-ui'
+import { useMessage, useDialog } from 'naive-ui'
 import type { FormInst, UploadFileInfo } from 'naive-ui'
 import {
   IconFileText as FileText,
@@ -483,13 +681,15 @@ import {
   IconDeviceFloppy as Save,
   IconSend as Send,
   IconArrowLeft as ArrowLeft,
-  IconScan as Scan
+  IconScan as Scan,
+  IconBulb as Bulb
 } from '@tabler/icons-vue'
 import {
   submitAchievement,
   getTeachers,
   getStudentMe,
-  recognizeCertificate
+  recognizeCertificate,
+  uploadFile
 } from '@/api'
 
 // === API 适配器 ===
@@ -519,36 +719,12 @@ const createAchievement = async (payload: any): Promise<any> => {
   })
 }
 
-// 2. 教师列表适配器 (包装为兼容 Strapi 的 { data: [] } 格式)
-const fetchTeachers = async (): Promise<any> => {
-  const list = await getTeachers()
-  return { data: Array.isArray(list) ? list : [] }
-}
-
-// 3. 按学院获取教师 (前端过滤)
-const fetchTeachersByDept = async (deptName: string): Promise<any> => {
-  const list = await getTeachers() as any[]
-  const filtered = list.filter(t => 
-    (t.college && t.college.includes(deptName)) || 
-    (t.department && t.department.includes(deptName))
-  )
-  return { data: filtered }
-}
-
-// 4. 按学院ID获取教师 (回退到获取所有，由前端逻辑进一步处理)
-const fetchTeachersByDepartmentId = async (id: string): Promise<any> => {
-  return fetchTeachers() 
-}
-
-// 5. 获取学院列表 (Mock，直接返回空，触发组件内的 Fallback 数据)
-const fetchTeacherDepartments = async (): Promise<any> => {
-  return { data: [] }
-}
 const router = useRouter()
 const message = useMessage()
+const dialog = useDialog()
 
 // 当前选中的成果类型：null = 未选 | 'certificate' = 证书/竞赛 | 'paper' = 学术论文
-const collect_type = ref<null | 'certificate' | 'paper'>(null)
+const collect_type = ref<null | 'certificate' | 'paper' | 'patent'>(null)
 
 // 表单引用
 const form_ref = ref<FormInst | null>(null)
@@ -667,7 +843,8 @@ const paper_data = ref({
   tutor_department: '',
   tutor_name: '',
   evidence_url: '',
-  attachments: [] as UploadFileInfo[]
+  attachments: [] as UploadFileInfo[],
+  integrity_pledge: false
 })
 
 const paper_rules = {
@@ -675,9 +852,42 @@ const paper_rules = {
   journal_name: [{ required: true, message: '请输入期刊/会议名称', trigger: 'blur' }],
   journal_level: [{ required: true, message: '请选择期刊级别', trigger: 'change' }],
   publish_status: [{ required: true, message: '请选择发表状态', trigger: 'change' }],
+  publish_date: [{
+    required: true,
+    trigger: 'change',
+    validator: (_rule: any, value: number | null) => {
+      if (!value) return new Error('请选择发表/录用时间')
+      if (new Date(value) > new Date()) return new Error('日期不能晚于今天')
+      return true
+    }
+  }],
+  doi: [{
+    trigger: 'blur',
+    validator: (_rule: any, value: string) => {
+      if (!value) return true // DOI 选填
+      if (!/^10\.\d{4,}\/\S+$/.test(value)) return new Error('DOI 格式不正确，应以 10. 开头，如 10.1016/j.xxx.2024.01.001')
+      return true
+    }
+  }],
   author_order: [{ required: true, message: '请选择作者排序', trigger: 'change' }],
+  attachments: [{
+    required: true,
+    trigger: 'change',
+    validator: (_rule: any, value: UploadFileInfo[]) => {
+      if (!value || value.length === 0) return new Error('请上传至少一个证明文件（录用通知/发表页截图）')
+      return true
+    }
+  }],
   tutor_department: [{ required: true, message: '请选择导师所属学院', trigger: 'change' }],
-  tutor_name: [{ required: true, message: '请选择导师姓名', trigger: 'change' }]
+  tutor_name: [{ required: true, message: '请选择导师姓名', trigger: 'change' }],
+  integrity_pledge: [{
+    required: true,
+    trigger: 'change',
+    validator: (_rule: any, value: boolean) => {
+      if (!value) return new Error('请勾选诚信承诺')
+      return true
+    }
+  }]
 }
 
 const journal_level_opts = [
@@ -700,6 +910,60 @@ const author_order_opts = [
   { label: '通讯作者', value: '通讯作者' },
   { label: '第二作者', value: '第二作者' },
   { label: '第三作者及以后', value: '其他作者' }
+]
+
+// ========== 专利表单数据 ==========
+const patent_form_ref = ref<FormInst | null>(null)
+const patent_ocr_loading = ref(false)
+
+const patent_data = ref({
+  student_id: '',
+  name: '',
+  patent_title: '',
+  patent_type: '',
+  patent_number: '',
+  patent_status: '',
+  patent_date: null as number | null,
+  patent_inventors: '',
+  patent_holder: '',
+  tutor_department: '',
+  tutor_name: '',
+  evidence_url: '',
+  attachments: [] as UploadFileInfo[],
+  integrity_pledge: false
+})
+
+const patent_rules = {
+  patent_title: [{ required: true, message: '请输入专利/著作权名称', trigger: 'blur' }],
+  patent_type: [{ required: true, message: '请选择专利类型', trigger: 'change' }],
+  patent_number: [{ required: true, message: '请输入专利号/登记号', trigger: 'blur' }],
+  patent_status: [{ required: true, message: '请选择专利状态', trigger: 'change' }],
+  patent_date: [{
+    required: true,
+    trigger: 'change',
+    validator: (_rule: any, value: number | null) => {
+      if (!value) return new Error('请选择授权/登记日期')
+      if (new Date(value) > new Date()) return new Error('日期不能晚于今天')
+      return true
+    }
+  }],
+  patent_inventors: [{ required: true, message: '请输入发明人/著作权人', trigger: 'blur' }],
+  tutor_department: [{ required: true, message: '请选择导师所属学院', trigger: 'change' }],
+  tutor_name: [{ required: true, message: '请选择导师姓名', trigger: 'change' }]
+}
+
+const patent_type_opts = [
+  { label: '发明专利', value: '发明专利' },
+  { label: '实用新型专利', value: '实用新型专利' },
+  { label: '外观设计专利', value: '外观设计专利' },
+  { label: '软件著作权', value: '软件著作权' }
+]
+
+const patent_status_opts = [
+  { label: '已授权', value: 'granted' },
+  { label: '已受理', value: 'accepted' },
+  { label: '实审中', value: 'under_review' },
+  { label: '已公开', value: 'published' }
 ]
 
 // 选项配置 - 保留数字值，映射为后端字段值
@@ -742,10 +1006,14 @@ const loading_teachers = ref(false)
 
 // 根据当前学院的教师数据生成选项
 const filtered_teacher_opts = computed(() => {
-  if (!form_data.value.tutor_department) {
+  // 任意一个表单选择了学院且有教师数据即可显示
+  const hasDept = form_data.value.tutor_department ||
+                  paper_data.value.tutor_department ||
+                  patent_data.value.tutor_department
+  if (!hasDept || current_department_teachers.value.length === 0) {
     return []
   }
-  
+
   return current_department_teachers.value.map(teacher => ({
     label: teacher.name || '未知教师',
     value: teacher.name || '',
@@ -789,7 +1057,8 @@ const reset_paper_form = () => {
     student_id, name,
     paper_title: '', journal_name: '', journal_level: '',
     publish_status: '', publish_date: null, author_order: '',
-    doi: '', tutor_department: '', tutor_name: '', attachments: []
+    doi: '', tutor_department: '', tutor_name: '', attachments: [],
+    integrity_pledge: false
   })
   message.success('表单已重置')
 }
@@ -799,7 +1068,7 @@ const handle_paper_ocr = async ({ file, onFinish, onError }: any) => {
   if (!file.file) { onError(); return }
   paper_ocr_loading.value = true
   try {
-    const res = await recognizeCertificate(file.file)
+    const res = await recognizeCertificate(file.file, 'paper')
     const raw = res?.recognized_data
 
     if (!raw) {
@@ -835,7 +1104,19 @@ const handle_paper_ocr = async ({ file, onFinish, onError }: any) => {
     message.success('识别完成，请核对信息并补充导师')
     onFinish()
   } catch (e: any) {
-    message.error(e.message || 'OCR 识别出错')
+    const errorMsg = e.message || 'OCR 识别出错';
+    if (errorMsg.includes('上传的图片类型不符合') || errorMsg.includes('上传的图片类型与当前选择的成果类别不匹配')) {
+      dialog.warning({
+        title: '类型不匹配',
+        content: errorMsg,
+        positiveText: '退出',
+        onPositiveClick: () => {
+          collect_type.value = null; // 返回类型选择页面
+        }
+      });
+    } else {
+      message.error(errorMsg)
+    }
     onError()
   } finally {
     paper_ocr_loading.value = false
@@ -906,7 +1187,19 @@ const handle_cert_ocr = async ({ file, onFinish, onError }: any) => {
     message.success((typeHints[certType] || '识别完成') + '，请核对信息')
     onFinish()
   } catch (e: any) {
-    message.error(e.message || 'OCR 识别出错')
+    const errorMsg = e.message || 'OCR 识别出错';
+    if (errorMsg.includes('上传的图片类型不符合') || errorMsg.includes('上传的图片类型与当前选择的成果类别不匹配')) {
+      dialog.warning({
+        title: '类型不匹配',
+        content: errorMsg,
+        positiveText: '退出',
+        onPositiveClick: () => {
+          collect_type.value = null; // 返回类型选择页面
+        }
+      });
+    } else {
+      message.error(errorMsg)
+    }
     onError()
   } finally {
     cert_ocr_loading.value = false
@@ -931,6 +1224,20 @@ const submit_paper_form = async () => {
         })()
       : ''
 
+    // 上传附件文件到服务器
+    const uploaded_urls: string[] = []
+    for (const fileInfo of paper_data.value.attachments) {
+      if (fileInfo.file) {
+        try {
+          const res = await uploadFile(fileInfo.file)
+          if (res && res.url) uploaded_urls.push(res.url)
+        } catch (e) {
+          console.error('文件上传失败:', fileInfo.name, e)
+          throw new Error(`文件 "${fileInfo.name}" 上传失败，请重试`)
+        }
+      }
+    }
+
     await submitAchievement({
       teacher_id: teacherId,
       title: paper_data.value.paper_title,
@@ -945,9 +1252,10 @@ const submit_paper_form = async () => {
         doi: paper_data.value.doi,
         issn: paper_data.value.issn,
         tutor_department: paper_data.value.tutor_department,
-        tutor_name: paper_data.value.tutor_name
+        tutor_name: paper_data.value.tutor_name,
+        attachment_urls: uploaded_urls
       },
-      evidence_url: paper_data.value.evidence_url || ''
+      evidence_url: paper_data.value.evidence_url || uploaded_urls[0] || ''
     })
 
     message.success('论文成果提交成功！')
@@ -960,6 +1268,143 @@ const submit_paper_form = async () => {
     }
   } finally {
     submitting.value = false
+  }
+}
+
+// ========== 专利表单方法 ==========
+const handle_patent_department_change = async (value: string) => {
+  patent_data.value.tutor_name = ''
+  if (value) await fetch_teachers_by_department(value)
+}
+
+const reset_patent_form = () => {
+  patent_form_ref.value?.restoreValidation()
+  const { student_id, name } = patent_data.value
+  Object.assign(patent_data.value, {
+    student_id, name,
+    patent_title: '', patent_type: '', patent_number: '',
+    patent_status: '', patent_date: null, patent_inventors: '',
+    patent_holder: '', tutor_department: '', tutor_name: '',
+    evidence_url: '', attachments: []
+  })
+  message.success('表单已重置')
+}
+
+const submit_patent_form = async () => {
+  try {
+    await patent_form_ref.value?.validate()
+    submitting.value = true
+
+    const selectedTeacher = filtered_teacher_opts.value.find(
+      t => t.value === patent_data.value.tutor_name
+    )
+    const teacherId = selectedTeacher?.teacher_id ? Number(selectedTeacher.teacher_id) : null
+    if (!teacherId) throw new Error('请选择有效的导师')
+
+    const patent_date_str = patent_data.value.patent_date
+      ? (() => {
+          const d = new Date(patent_data.value.patent_date!)
+          return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+        })()
+      : ''
+
+    // 上传附件文件到服务器
+    const uploaded_urls: string[] = []
+    for (const fileInfo of patent_data.value.attachments) {
+      if (fileInfo.file) {
+        try {
+          const res = await uploadFile(fileInfo.file)
+          if (res && res.url) uploaded_urls.push(res.url)
+        } catch (e) {
+          console.error('文件上传失败:', fileInfo.name, e)
+          throw new Error(`文件 "${fileInfo.name}" 上传失败，请重试`)
+        }
+      }
+    }
+
+    await submitAchievement({
+      teacher_id: teacherId,
+      title: patent_data.value.patent_title,
+      type: 'patent',
+      content_json: {
+        patent_title: patent_data.value.patent_title,
+        patent_type: patent_data.value.patent_type,
+        patent_number: patent_data.value.patent_number,
+        patent_status: patent_data.value.patent_status,
+        patent_date: patent_date_str,
+        patent_inventors: patent_data.value.patent_inventors,
+        patent_holder: patent_data.value.patent_holder,
+        tutor_department: patent_data.value.tutor_department,
+        tutor_name: patent_data.value.tutor_name,
+        attachment_urls: uploaded_urls
+      },
+      evidence_url: patent_data.value.evidence_url || uploaded_urls[0] || ''
+    })
+
+    message.success('专利成果提交成功！')
+    router.push('/student/achievement')
+  } catch (error: any) {
+    if (error.name === 'ValidationError') {
+      message.error('请完善必填信息后再提交')
+    } else {
+      message.error(error.message || '提交失败，请重试')
+    }
+  } finally {
+    submitting.value = false
+  }
+}
+
+const handle_patent_ocr = async ({ file, onFinish, onError }: any) => {
+  if (!file.file) { onError(); return }
+  patent_ocr_loading.value = true
+  try {
+    const res = await recognizeCertificate(file.file, 'patent')
+    const raw = res?.recognized_data
+
+    if (!raw) {
+      message.error('识别失败，请手动填写或更换图片')
+      onError()
+      return
+    }
+
+    if (raw.title || raw.patent_name || raw.certificate_name)
+      patent_data.value.patent_title = (raw.title || raw.patent_name || raw.certificate_name) as string
+    if (raw.patent_type || raw.award)
+      patent_data.value.patent_type = (raw.patent_type || raw.award) as string
+    if (raw.patent_number || raw.certificate_number)
+      patent_data.value.patent_number = (raw.patent_number || raw.certificate_number) as string
+    if (raw.patent_holder)
+      patent_data.value.patent_holder = raw.patent_holder as string
+    if (Array.isArray(raw.team_members) && raw.team_members.length) {
+      patent_data.value.patent_inventors = (raw.team_members as string[]).join('、')
+    } else if (raw.recipient_name) {
+      patent_data.value.patent_inventors = raw.recipient_name as string
+    }
+    if (raw.issue_date || raw.date) {
+      const d = new Date((raw.issue_date || raw.date) as string)
+      if (!isNaN(d.getTime())) patent_data.value.patent_date = d.getTime()
+    }
+    if (res.file_url) patent_data.value.evidence_url = res.file_url
+
+    message.success('专利识别完成，请核对信息并补充导师')
+    onFinish()
+  } catch (e: any) {
+    const errorMsg = e.message || 'OCR 识别出错';
+    if (errorMsg.includes('上传的图片类型不符合') || errorMsg.includes('上传的图片类型与当前选择的成果类别不匹配')) {
+      dialog.warning({
+        title: '类型不匹配',
+        content: errorMsg,
+        positiveText: '退出',
+        onPositiveClick: () => {
+          collect_type.value = null; // 返回类型选择页面
+        }
+      });
+    } else {
+      message.error(errorMsg)
+    }
+    onError()
+  } finally {
+    patent_ocr_loading.value = false
   }
 }
 
@@ -983,53 +1428,17 @@ const handle_department_change = async (value: string) => {
 // 获取所有教师数据（初始化时使用）
 const fetch_teachers_data = async () => {
   if (loading_teachers.value) return
-  
   try {
     loading_teachers.value = true
-    console.log('开始获取教师数据...')
-    
-    const response = await fetchTeachers()
-    console.log('教师API响应:', response)
-    
-    if (response && response.data) {
-      let teacherData: any[] = []
-      
-      // 处理不同的响应格式
-      if (Array.isArray(response.data)) {
-        teacherData = response.data
-      } else if (response.data.data && Array.isArray(response.data.data)) {
-        teacherData = response.data.data
-      } else if (response.data.data && typeof response.data.data === 'object') {
-        // 处理Strapi格式
-        const strapiData = response.data.data
-        if (Array.isArray(strapiData)) {
-          teacherData = strapiData.map((item: any) => ({
-            id: item.id,
-            ...item.attributes
-          }))
-        }
-      }
-      
-      // 标准化教师数据
-      teachers_data.value = teacherData.map((item: any) => ({
-        id: item.id?.toString() || '',
-        name: item.name || '',
-        title: item.title || '',
-        department: item.department || item.college || '',
-        research_direction: item.research_direction || item.researchContent || '',
-        email: item.email || '',
-        phone: item.phone || ''
-      }))
-      
-      console.log('处理后的教师数据:', teachers_data.value)
-      message.success(`成功加载 ${teachers_data.value.length} 位教师信息`)
-    } else {
-      console.warn('教师API返回数据格式异常')
-      message.warning('教师数据加载异常，请稍后重试')
-    }
+    const allTeachers = await getTeachers() as any[]
+    teachers_data.value = allTeachers.map((item: any) => ({
+      id: item.id?.toString() || '',
+      name: item.name || '',
+      title: item.title || '',
+      department: item.department || item.college || ''
+    }))
   } catch (error: any) {
     console.error('获取教师数据失败:', error)
-    message.error('获取教师信息失败，请检查网络连接')
   } finally {
     loading_teachers.value = false
   }
@@ -1039,183 +1448,30 @@ const fetch_teachers_data = async () => {
 const fetch_teachers_by_department = async (department: string) => {
   try {
     loading_teachers.value = true
-    console.log(`开始获取${department}学院教师数据...`)
-    
-    // 首先尝试获取所有学院信息，然后匹配
-    console.log('尝试获取所有学院信息...')
-    let allDepartmentsResponse
-    try {
-      allDepartmentsResponse = await fetchTeacherDepartments()
-      console.log('所有学院信息API响应:', allDepartmentsResponse)
-    } catch (error) {
-      console.warn('无法从后端获取学院信息，使用备用数据:', error)
-      // 如果后端没有学院数据，使用前端定义的学院映射
-      allDepartmentsResponse = {
-        data: [
-          { id: '1', code: 'computer', name: '计算机学院', attributes: { code: 'computer', name: '计算机学院' } },
-          { id: '2', code: 'math', name: '数学学院', attributes: { code: 'math', name: '数学学院' } },
-          { id: '3', code: 'physics', name: '物理学院', attributes: { code: 'physics', name: '物理学院' } },
-          { id: '4', code: 'chemistry', name: '化学学院', attributes: { code: 'chemistry', name: '化学学院' } },
-          { id: '5', code: 'biology', name: '生物学院', attributes: { code: 'biology', name: '生物学院' } },
-          { id: '6', code: 'economics', name: '经济学院', attributes: { code: 'economics', name: '经济学院' } },
-          { id: '7', code: 'management', name: '管理学院', attributes: { code: 'management', name: '管理学院' } },
-          { id: '8', code: 'foreign', name: '外语学院', attributes: { code: 'foreign', name: '外语学院' } }
-        ]
-      }
-    }
-    
-    let departmentId: string | null = null
-    
-    // 处理所有学院信息响应
-    if (allDepartmentsResponse) {
-      console.log('原始学院API响应:', allDepartmentsResponse)
-      let allDepartmentData: any[] = []
-      
-      // 处理Strapi v5的响应格式
-      if (allDepartmentsResponse.data) {
-        if (Array.isArray(allDepartmentsResponse.data)) {
-          allDepartmentData = allDepartmentsResponse.data
-        } else if (allDepartmentsResponse.data.data && Array.isArray(allDepartmentsResponse.data.data)) {
-          allDepartmentData = allDepartmentsResponse.data.data
-        } else if (typeof allDepartmentsResponse.data === 'object' && allDepartmentsResponse.data.id) {
-          // 单个对象的情况
-          allDepartmentData = [allDepartmentsResponse.data]
-        }
-      } else if (Array.isArray(allDepartmentsResponse)) {
-        allDepartmentData = allDepartmentsResponse
-      }
-      
-      console.log('解析后的学院数据:', allDepartmentData)
-      console.log('当前查找的学院代码:', department)
-      
-      // 查找匹配的学院（通过code字段或name字段）
-      const matchedDepartment = allDepartmentData.find((dept: any) => {
-        const deptData = dept.attributes || dept
-        const code = deptData.code || deptData.Code
-        const name = deptData.name || deptData.Name
-        
-        console.log(`检查学院: ID=${dept.id}, code=${code}, name=${name}`)
-        
-        return code === department || 
-               name === department ||
-               code === department.toLowerCase() ||
-               name?.toLowerCase().includes(department.toLowerCase()) ||
-               department.toLowerCase().includes(name?.toLowerCase())
-      })
-      
-      if (matchedDepartment) {
-        departmentId = matchedDepartment.id?.toString()
-        console.log(`找到匹配的学院:`, matchedDepartment, `ID: ${departmentId}`)
-      } else {
-        console.log(`未找到匹配的学院，可用学院:`, allDepartmentData.map(d => ({
-          id: d.id,
-          code: d.attributes?.code || d.code || d.attributes?.Code || d.Code,
-          name: d.attributes?.name || d.name || d.attributes?.Name || d.Name
-        })))
-        console.log(`查找条件: ${department}`)
-      }
+    // getTeachers() 经过响应拦截器后直接返回教师数组
+    const allTeachers = await getTeachers() as any[]
+
+    // 按学院名称过滤
+    const filtered = allTeachers.filter((t: any) => {
+      const dept = t.department || t.college || ''
+      return dept === department || dept.includes(department) || department.includes(dept)
+    })
+
+    current_department_teachers.value = filtered.map((item: any) => ({
+      id: item.id?.toString() || '',
+      name: item.name || '',
+      title: item.title || '',
+      department: item.department || item.college || department
+    }))
+
+    if (current_department_teachers.value.length > 0) {
+      message.success(`成功加载 ${current_department_teachers.value.length} 位${department}教师信息`)
     } else {
-      console.error('学院API响应为空或无效')
-    }
-    
-    // 如果找到学院ID，则根据学院ID获取教师信息
-    if (departmentId) {
-      console.log(`使用学院ID ${departmentId} 获取教师信息...`)
-      let response
-      try {
-        response = await fetchTeachersByDepartmentId(departmentId)
-        console.log(`${department}学院教师API响应:`, response)
-      } catch (error) {
-        console.warn(`通过学院ID获取教师失败，尝试备用方法:`, error)
-        // 如果通过学院ID获取失败，回退到原方法
-        response = await fetchTeachersByDept(department)
-        console.log(`${department}学院教师API响应(备用方法):`, response)
-      }
-      
-      if (response && response.data) {
-        let teacherData: any[] = []
-        
-        // 处理不同的响应格式
-        if (Array.isArray(response.data)) {
-          teacherData = response.data
-        } else if (response.data.data && Array.isArray(response.data.data)) {
-          teacherData = response.data.data
-        } else if (response.data.data && typeof response.data.data === 'object') {
-          // 处理Strapi格式
-          const strapiData = response.data.data
-          if (Array.isArray(strapiData)) {
-            teacherData = strapiData.map((item: any) => ({
-              id: item.id,
-              ...item.attributes
-            }))
-          }
-        }
-        
-        // 标准化教师数据并存储到当前学院教师数据中
-        current_department_teachers.value = teacherData.map((item: any) => ({
-          id: item.id?.toString() || '',
-          name: item.name || '',
-          title: item.title || '',
-          department: item.department || item.college || department,
-          research_direction: item.research_direction || item.researchContent || '',
-          email: item.email || '',
-          phone: item.phone || ''
-        }))
-        
-        console.log(`${department}学院教师数据加载成功:`, current_department_teachers.value)
-        message.success(`成功加载 ${current_department_teachers.value.length} 位${department}学院教师信息`)
-      } else {
-        console.warn(`${department}学院教师API返回数据格式异常`)
-        message.warning(`${department}学院教师数据加载异常，请稍后重试`)
-        current_department_teachers.value = []
-      }
-    } else {
-      // 如果没有找到学院ID，回退到原来的方法
-      console.log(`未找到${department}学院信息，使用备用方法获取教师数据`)
-      const response = await fetchTeachersByDept(department)
-      console.log(`${department}学院教师API响应(备用方法):`, response)
-      
-      if (response && response.data) {
-        let teacherData: any[] = []
-        
-        // 处理不同的响应格式
-        if (Array.isArray(response.data)) {
-          teacherData = response.data
-        } else if (response.data.data && Array.isArray(response.data.data)) {
-          teacherData = response.data.data
-        } else if (response.data.data && typeof response.data.data === 'object') {
-          // 处理Strapi格式
-          const strapiData = response.data.data
-          if (Array.isArray(strapiData)) {
-            teacherData = strapiData.map((item: any) => ({
-              id: item.id,
-              ...item.attributes
-            }))
-          }
-        }
-        
-        // 标准化教师数据并存储到当前学院教师数据中
-        current_department_teachers.value = teacherData.map((item: any) => ({
-          id: item.id?.toString() || '',
-          name: item.name || '',
-          title: item.title || '',
-          department: item.department || item.college || department,
-          research_direction: item.research_direction || item.researchContent || '',
-          email: item.email || '',
-          phone: item.phone || ''
-        }))
-        
-        console.log(`${department}学院教师数据加载成功(备用方法):`, current_department_teachers.value)
-        message.success(`成功加载 ${current_department_teachers.value.length} 位${department}学院教师信息`)
-      } else {
-        console.warn(`${department}学院教师API返回数据格式异常`)
-        message.warning(`${department}学院教师数据加载异常，请稍后重试`)
-        current_department_teachers.value = []
-      }
+      message.warning(`${department}暂无教师数据`)
     }
   } catch (error: any) {
-    console.error(`获取${department}学院教师数据失败:`, error)
-    message.error(`获取${department}学院教师信息失败，请检查网络连接`)
+    console.error(`获取${department}教师数据失败:`, error)
+    message.error(`获取教师信息失败，请检查网络连接`)
     current_department_teachers.value = []
   } finally {
     loading_teachers.value = false
@@ -1343,8 +1599,26 @@ const submitAchievementForm = async () => {
       }
     }
     
+    // 上传附件文件到服务器
+    const uploaded_urls: string[] = []
+    for (const fileInfo of form_data.value.attachments) {
+      if (fileInfo.file) {
+        try {
+          const res = await uploadFile(fileInfo.file)
+          if (res && res.url) uploaded_urls.push(res.url)
+        } catch (e) {
+          console.error('文件上传失败:', fileInfo.name, e)
+          throw new Error(`文件 "${fileInfo.name}" 上传失败，请重试`)
+        }
+      }
+    }
+    if (uploaded_urls.length > 0) {
+      (submit_data.data as any).attachment_urls = uploaded_urls;
+      (submit_data.data as any).evidence_url = uploaded_urls[0]
+    }
+
     console.log('提交数据:', submit_data)
-    
+
     // 调用API提交到 /api/achievements
     const response = await createAchievement(submit_data)
     
@@ -1385,27 +1659,14 @@ const submitAchievementForm = async () => {
 // 动态获取学院列表
 const init_departments = async () => {
   try {
-    console.log('正在从后端同步学院列表...')
-    const response = await fetchTeachers()
-    if (response && response.data && Array.isArray(response.data)) {
-      const teachers = response.data
-      const depts = new Set<string>()
-      
-      teachers.forEach((t: any) => {
-        // 优先使用 department 字段，兼容 college 字段
-        const dept = t.department || t.college
-        if (dept) {
-          depts.add(dept)
-        }
-      })
-      
-      if (depts.size > 0) {
-        department_opts.value = Array.from(depts).map(d => ({
-          label: d,
-          value: d
-        }))
-        console.log('学院列表已同步:', department_opts.value)
-      }
+    const teachers = await getTeachers() as any[]
+    const depts = new Set<string>()
+    teachers.forEach((t: any) => {
+      const dept = t.department || t.college
+      if (dept) depts.add(dept)
+    })
+    if (depts.size > 0) {
+      department_opts.value = Array.from(depts).map(d => ({ label: d, value: d }))
     }
   } catch (error) {
     console.error('同步学院列表失败，使用默认值:', error)
@@ -1421,6 +1682,8 @@ const loadCurrentStudentInfo = async () => {
       form_data.value.name = studentInfo.name || ''
       paper_data.value.student_id = studentInfo.student_id || ''
       paper_data.value.name = studentInfo.name || ''
+      patent_data.value.student_id = studentInfo.student_id || ''
+      patent_data.value.name = studentInfo.name || ''
       console.log('已自动填入学生信息:', { student_id: studentInfo.student_id, name: studentInfo.name })
     }
   } catch (error) {
@@ -1597,6 +1860,20 @@ onMounted(() => {
   border-radius: 6px;
 }
 
+.integrity_section {
+  margin-top: 24px;
+  padding: 16px 20px;
+  background: #fffbe6;
+  border: 1px solid #ffe58f;
+  border-radius: 8px;
+}
+
+.integrity_text {
+  font-size: 13px;
+  color: #614700;
+  line-height: 1.6;
+}
+
 .form_actions {
   margin-top: 32px;
   padding-top: 24px;
@@ -1704,6 +1981,11 @@ onMounted(() => {
 .paper_icon {
   background: linear-gradient(135deg, #e3f2fd, #bbdefb);
   color: #1976d2;
+}
+
+.patent_icon {
+  background: linear-gradient(135deg, #fff3e0, #ffe0b2);
+  color: #e65100;
 }
 
 .type_title {

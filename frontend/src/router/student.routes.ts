@@ -30,12 +30,6 @@ export const studentRoutes: Array<RouteRecordRaw> = [
                 meta: { title: '成果详情' }
             },
             {
-                path: 'achievement-settings',
-                name: 'achievementSettings',
-                component: () => import('../components/student/honors/AchievementSettings.vue'),
-                meta: { title: '成果设置' }
-            },
-            {
                 path: 'certificate-ocr',
                 name: 'certificateOcr',
                 component: () => import('../components/student/honors/CertificateOcr.vue'),

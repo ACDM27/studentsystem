@@ -23,18 +23,6 @@
             </template>
             证书识别
           </n-button>
-          <n-button color="#3370ff" @click="showFeishuImport = true" class="feishu_btn">
-            <template #icon>
-              <Link :size="24" />
-            </template>
-            飞书导入
-          </n-button>
-          <n-button quaternary @click="go_to_settings" class="settings_btn">
-            <template #icon>
-              <Settings :size="24" />
-            </template>
-            规则设置
-          </n-button>
         </div>
       </div>
     </n-card>
@@ -113,8 +101,6 @@
         </div>
       </n-card>
       
-      <!-- 飞书导入组件 -->
-    <FeishuQuickImport v-model:show="showFeishuImport" @success="handleImportSuccess" />
 
     <!-- 证书详情模态框 -->
       <n-card 
@@ -218,16 +204,12 @@ import {
   IconEye as Eye, 
   IconEdit as Edit, 
   IconTrash as Trash,
-  IconSettings as Settings,
   IconBulb as Bulb,
   IconCertificate as Certificate,
   IconHelpCircle as HelpCircle,
   IconMedal as Medal,
   IconScan as Scan,
-  IconLink as Link
 } from '@tabler/icons-vue'
-
-import FeishuQuickImport from './FeishuQuickImport.vue'
 
 import { 
   getMyAchievements,
@@ -451,7 +433,6 @@ const search_key = ref<string>('')
 const year_filter = ref<string | null>(null)
 const level_filter = ref<string | null>(null)
 const type_filter = ref<string | null>(null)
-const showFeishuImport = ref(false)
 
 // 筛选选项 - 明确指定类型
 const year_options: SelectOption[] = [
@@ -1026,17 +1007,6 @@ const collect_achievement = (): void => {
 
 
 
-
-// 飞书导入相关
-const handleImportSuccess = () => {
-  message.success('成果导入成功！')
-  fetchAchievementData() // 刷新列表
-}
-
-// 规则设置方法
-const go_to_settings = (): void => {
-  router.push('/student/achievement-settings')
-}
 
 // OCR证书识别方法
 const upload_certificate_ocr = (): void => {

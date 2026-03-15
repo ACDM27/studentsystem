@@ -215,13 +215,13 @@ class CertificateRecognitionServiceOpenAI:
 
     def classify_document(self, image_path: str) -> str:
         """
-        Stage 1: Lightweight classification — determine whether the uploaded image is
-        an academic paper (page / acceptance notice / journal cover) or a certificate
-        (award / honor / qualification).
+        Stage 1: Lightweight classification — determine the uploaded image's document type.
 
         Returns:
-            'paper'       — academic paper related document
-            'certificate' — award/honor/qualification certificate (default fallback)
+            'paper'       — academic paper / journal article / acceptance notice
+            'patent'      — patent certificate / patent application document
+            'competition' — competition award / contest certificate
+            'certificate' — other certificate / honor / qualification (default fallback)
         """
         try:
             image_base64 = self.encode_image_to_base64(image_path)
@@ -237,19 +237,29 @@ class CertificateRecognitionServiceOpenAI:
                         {
                             "type": "text",
                             "text": (
-                                "请判断这张图片的文档类型。\n"
-                                "如果是学术论文页面、期刊文章正文、论文录用通知、版面费票据等论文相关文件，请回答：paper\n"
-                                "如果是获奖证书、荣誉证书、奖状、职业资格证书、竞赛证书等，请回答：certificate\n"
-                                "只输出 paper 或 certificate，不要有任何其他文字。"
+                                "请判断这张图片的文档类型，只能从以下四个类别中选择一个：\n"
+                                "1. paper — 学术论文页面、期刊文章正文、论文录用通知、版面费票据等论文相关文件\n"
+                                "2. patent — 专利证书、专利授权通知书、专利申请受理通知书等专利相关文件\n"
+                                "3. competition — 竞赛获奖证书、比赛奖状、学科竞赛证书等竞赛相关文件\n"
+                                "4. certificate — 荣誉证书、资格证书、等级证书、结业证书等其他证书类文件\n"
+                                "只输出 paper、patent、competition 或 certificate 中的一个，不要有任何其他文字。"
                             )
                         }
                     ]
                 }],
-                temperature=0.05,
-                max_tokens=10
+                max_tokens=20
             )
             result = completion.choices[0].message.content.strip().lower()
-            return "paper" if "paper" in result else "certificate"
+            # 从结果中提取核心类型
+            if "paper" in result:
+                return "paper"
+            elif "patent" in result:
+                return "patent"
+            elif "competition" in result:
+                return "competition"
+            elif "certificate" in result:
+                return "certificate"
+            return "certificate"
         except Exception:
             return "certificate"
 

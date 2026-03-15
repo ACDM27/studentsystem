@@ -41,7 +41,17 @@ async def ocr_recognize(
         # Step 1: Save certificate permanently
         file_info = await file_manager.save_certificate_permanent(file, student.id)
         
-        # Step 2: Recognize - 有 cert_type 则走类型专属模板，否则走自动分类
+        # Step 2: Validate Document Type (Pre-classification)
+        # Use a lightweight call to ensure the image matches the expected major category
+        doc_type = certificate_recognition_service_openai.classify_document(file_info["file_path"])
+        
+        # Check if the uploaded image matches the frontend selected type
+        if cert_type == "paper" and "paper" not in doc_type:
+             return error_response(msg="上传的图片类型不符合（学术论文），请退出重新选择", code=400)
+        elif cert_type and cert_type != "paper" and "paper" in doc_type:
+            return error_response(msg="上传的图片类型不符合（证书/奖项/专利），请退出重新选择", code=400)
+
+        # Step 3: Recognize - 有 cert_type 则走类型专属模板，否则走自动分类
         if cert_type and cert_type in ("competition", "patent", "research", "project", "certificate", "certification", "paper"):
             recognition_result = certificate_recognition_service_openai.recognize_by_type(
                 file_info["file_path"], cert_type
@@ -64,7 +74,7 @@ async def ocr_recognize(
             return success_response(data={
                 "recognized_data": {
                     # 文档类型（两阶段OCR分类结果）
-                    "document_type": data.get("document_type", "certificate"),
+                    "document_type": data.get("document_type", doc_type),
 
                     # 标题：优先使用智能生成的 title（validate_recognition_result 已处理）
                     "title": data.get("title") or data.get("certificate_name"),
@@ -166,7 +176,30 @@ async def create_achievement(
     teacher = db.query(SysTeacher).filter(SysTeacher.id == achievement.teacher_id).first()
     if not teacher:
         return error_response(msg="Teacher not found", code=404)
-    
+
+    # Duplicate detection: same student + same title + same type
+    existing = db.query(BizAchievement).filter(
+        BizAchievement.student_id == student.id,
+        BizAchievement.title == achievement.title,
+        BizAchievement.type == achievement.type,
+        BizAchievement.is_deleted == False
+    ).first()
+    if existing:
+        return error_response(msg="您已提交过相同标题的成果，请勿重复提交", code=400)
+
+    # Duplicate detection by DOI (for papers)
+    if achievement.content_json and isinstance(achievement.content_json, dict):
+        doi = achievement.content_json.get("doi")
+        if doi and isinstance(doi, str) and doi.strip():
+            doi_duplicate = db.query(BizAchievement).filter(
+                BizAchievement.student_id == student.id,
+                BizAchievement.is_deleted == False
+            ).all()
+            for ach in doi_duplicate:
+                if ach.content_json and isinstance(ach.content_json, dict):
+                    if ach.content_json.get("doi") == doi.strip():
+                        return error_response(msg="该DOI对应的论文已提交过，请勿重复提交", code=400)
+
     # If evidence_url is provided, verify access
     if achievement.evidence_url:
         if not file_manager.verify_certificate_access(
@@ -533,7 +566,6 @@ async def ai_chat(
                 
                 # 证书相关
                 "evidence_url": ach.evidence_url,
-                "feishu_attachment_token": ach.feishu_attachment_token,
                 
                 # 审核信息
                 "audit_comment": ach.audit_comment,

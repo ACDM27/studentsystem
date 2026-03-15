@@ -233,7 +233,6 @@ function updateActiveMenu() {
     '/student/achievement': 'achievement',
     '/student/achievement-collect': 'achievement',
     '/student/achievement-detail': 'achievement',
-    '/student/achievement-settings': 'achievement',
     '/student/certificate-ocr': 'achievement',
     '/student/portrait': 'portrait_analysis',
     '/student/portrait/chat': 'portrait_chat',

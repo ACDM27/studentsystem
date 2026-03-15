@@ -57,9 +57,9 @@ class CertificateAccessMiddleware(BaseHTTPMiddleware):
         # Decode token and verify access
         try:
             payload = decode_access_token(token)
-            username = payload.get("sub")
+            user_id = payload.get("sub")
 
-            if not username:
+            if not user_id:
                 return JSONResponse(
                     status_code=401,
                     content={"detail": "Invalid token"}
@@ -68,7 +68,7 @@ class CertificateAccessMiddleware(BaseHTTPMiddleware):
             # Get user from database
             db = SessionLocal()
             try:
-                user = db.query(SysUser).filter(SysUser.username == username).first()
+                user = db.query(SysUser).filter(SysUser.id == int(user_id)).first()
 
                 if not user:
                     return JSONResponse(

@@ -11,7 +11,7 @@ from database import init_db
 import os
 
 # Import routers
-from routers import auth, common, student, admin, certificate, activities, courses, feishu
+from routers import auth, common, student, admin, certificate, activities, courses
 
 # Create FastAPI app
 app = FastAPI(
@@ -47,7 +47,6 @@ app.include_router(admin.router)
 app.include_router(certificate.router)
 app.include_router(activities.router)
 app.include_router(courses.router)
-app.include_router(feishu.router)
 
 
 @app.on_event("startup")

@@ -30,12 +30,7 @@ class Settings(BaseSettings):
     QWEN_MODEL_NAME: str = "qwen-plus"
     QWEN_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
     QWEN_VL_MODEL: str = "qwen-vl-max"  # Using MAX model for better accuracy
-    
-    # Feishu Integration
-    FEISHU_APP_ID: str = ""
-    FEISHU_APP_SECRET: str = ""
-    FEISHU_ENCRYPT_KEY: str = "feishu-secret-encryption-key-change-in-production"  # 用于加密存储App Secret
-    
+
     # CORS
     ALLOWED_ORIGINS: Union[List[str], str] = ["http://localhost:3000", "http://localhost:8080", "http://localhost:5173"]
     
