@@ -168,9 +168,6 @@ import {
   IconHelpCircle
 } from '../../../utils/icons'
 import {
-  fetchStudentPortraitByStudentId,
-  createStudentPortrait,
-  addQaHistory,
   chatWithAI,
   getStudentMe as fetchStudentMe
 } from '@/api'
@@ -190,73 +187,36 @@ const user_name = ref('学生')
 const msg_container = ref<HTMLElement>()
 const message = useMessage()
 
-// 学生画像数据
-const portrait_data = ref<any>(null)
+// 学生数据
 const student_id = ref<string>('')
+const session_id = ref<string>('')
 
 // 组件挂载时初始化
 onMounted(async () => {
   await initializeUser()
-  await loadStudentPortrait()
-  // 添加欢迎消息
-  if (portrait_data.value) {
-    addMessage('assistant', `您好！我是您的AI学习助手。基于您的学习画像，我可以为您提供个性化的学习建议和分析。`)
-  }
 })
 
 // 初始化用户信息
 const initializeUser = async () => {
   try {
-    console.log('正在获取当前登录用户信息...')
-    const userResponse = await fetchStudentMe()
-    console.log('获取用户信息响应:', userResponse)
-    
-    if (userResponse && userResponse.data) {
-      // 优先使用student_id字段，如果没有则使用id字段
-      const studentId = userResponse.data.student_id || userResponse.data.id
+    // 响应拦截器已解包，返回值即为 data 对象
+    const data = await fetchStudentMe() as any
+    if (data) {
+      const studentId = data.student_id || data.id
       if (studentId) {
         student_id.value = studentId.toString()
-        user_name.value = userResponse.data.username || userResponse.data.name || '学生'
-        console.log('设置学生ID:', student_id.value)
-        console.log('设置用户名:', user_name.value)
+        user_name.value = data.name || data.username || '学生'
       } else {
-        console.error('响应中没有找到student_id或id字段')
         throw new Error('无法获取学生身份信息')
       }
     } else {
-      console.error('API响应数据为空')
       throw new Error('无法获取用户信息')
     }
   } catch (error) {
     console.error('获取用户信息失败:', error)
-    // 显示错误提示给用户
     message.error('无法获取学生身份信息，请重新登录')
     student_id.value = ''
     user_name.value = ''
-  }
-}
-
-// 加载学生画像数据
-const loadStudentPortrait = async () => {
-  try {
-    const response = await fetchStudentPortraitByStudentId(student_id.value)
-    if (response.data && response.data.length > 0) {
-      portrait_data.value = response.data[0]
-    } else {
-      // 如果没有画像数据，创建一个新的
-      const newPortrait = {
-        student: student_id.value,
-        summary: '新用户，正在建立学习画像...',
-        skills: [],
-        interests: [],
-        qa_history: [],
-        risk_alerts: []
-      }
-      const createResponse = await createStudentPortrait(newPortrait)
-      portrait_data.value = createResponse.data
-    }
-  } catch (error) {
-    console.error('加载学生画像失败:', error)
   }
 }
 
@@ -292,44 +252,11 @@ const sendMessage = async () => {
   is_loading.value = true
 
   try {
-    console.log('=== 开始发送消息 ===')
-    console.log('用户消息:', user_message)
-    console.log('学生ID:', student_id.value)
-    console.log('画像数据存在:', !!portrait_data.value)
-    
-    // 调用AI响应生成
     const ai_response = await generateAIResponse(user_message)
-    console.log('收到AI响应:', ai_response)
-    
     addMessage('assistant', ai_response)
-
-    // 保存对话历史到学生画像
-    if (portrait_data.value && portrait_data.value.id) {
-      try {
-        const qa_data = {
-          question: user_message,
-          answer: ai_response,
-          timestamp: new Date().toISOString(),
-          category: detectMessageCategory(user_message)
-        }
-        console.log('保存对话历史:', qa_data)
-        await addQaHistory(portrait_data.value.id, qa_data)
-        console.log('对话历史保存成功')
-      } catch (error) {
-        console.error('保存对话历史失败，但不影响用户体验:', error)
-      }
-    } else {
-      console.warn('画像数据不存在或缺少ID，跳过保存对话历史')
-    }
   } catch (error: any) {
-    console.error('=== 发送消息失败 ===')
-    console.error('错误对象:', error)
-    console.error('错误消息:', error.message)
-    console.error('错误堆栈:', error.stack)
-    
-    // 根据错误类型显示不同的提示
+    console.error('发送消息失败:', error)
     let errorMessage = '抱歉，AI助手服务暂时不可用，请稍后再试。'
-    
     if (error.response?.status === 404) {
       errorMessage = '抱歉，AI聊天服务接口未找到。请联系管理员检查后端配置。'
     } else if (error.response?.status === 500) {
@@ -337,12 +264,10 @@ const sendMessage = async () => {
     } else if (error.message?.includes('Network Error')) {
       errorMessage = '抱歉，网络连接失败。请检查网络连接后重试。'
     }
-    
     addMessage('assistant', errorMessage)
     message.error(errorMessage)
   } finally {
     is_loading.value = false
-    console.log('=== 消息发送流程结束 ===')
   }
 }
 
@@ -361,116 +286,31 @@ const handleEnterKey = (event: KeyboardEvent) => {
 
 // 生成AI响应
 const generateAIResponse = async (user_message: string): Promise<string> => {
-  try {
-    // 确保有学生ID
-    if (!student_id.value) {
-      console.error('学生ID未设置，无法调用AI聊天')
-      return '抱歉，无法获取您的身份信息，请刷新页面重试。'
-    }
-
-    // 准备上下文数据
-    const contextData = portrait_data.value ? {
-      summary: portrait_data.value.summary,
-      skills: portrait_data.value.skills,
-      interests: portrait_data.value.interests
-    } : undefined
-
-    // 调用AI聊天API（已包含错误处理和回退逻辑）
-    console.log('准备调用AI聊天API，参数:', {
-      question: user_message,
-      student_id: student_id.value,
-      context: contextData ? 'context_provided' : 'no_context'
-    })
-    
-    const response = await chatWithAI({
-      question: user_message,
-      student_id: student_id.value,
-      context: contextData ? JSON.stringify(contextData) : undefined
-    })
-    
-    console.log('AI聊天API完整响应:', JSON.stringify(response, null, 2))
-    console.log('响应类型:', typeof response)
-    
-    // 注意：由于 http 拦截器已经返回了 response.data
-    // 所以这里的 response 就是后端返回的数据对象，不需要再访问 .data
-    
-    // 情况1: response 本身就是字符串（直接返回的消息）
-    if (typeof response === 'string') {
-      console.log('响应是字符串，直接返回:', response)
-      return response
-    }
-    
-    // 情况2: response 是对象，检查是否是错误响应
-    if (response && typeof response === 'object') {
-      const anyResponse = response as any
-      // 检查错误标志
-      if ('error' in anyResponse && anyResponse.error) {
-        console.warn('AI返回错误响应:', response)
-        const errorMsg = anyResponse.response || anyResponse.message || '抱歉，AI助手服务暂时不可用。'
-        return typeof errorMsg === 'string' ? errorMsg : '抱歉，AI助手服务暂时不可用。'
-      }
-      
-      // 尝试从多个可能的字段提取AI响应
-      const aiResponse = anyResponse.response || anyResponse.message || anyResponse.answer || anyResponse.reply || anyResponse.data
-      
-      if (aiResponse && typeof aiResponse === 'string') {
-        console.log('成功提取AI响应:', aiResponse)
-        return aiResponse
-      }
-      
-      // 如果 aiResponse 是对象，尝试进一步提取
-      if (aiResponse && typeof aiResponse === 'object') {
-        const nestedResponse = aiResponse.response || aiResponse.message || aiResponse.answer || aiResponse.reply
-        if (nestedResponse && typeof nestedResponse === 'string') {
-          console.log('从嵌套对象提取AI响应:', nestedResponse)
-          return nestedResponse
-        }
-      }
-    }
-    
-    console.error('无法从响应中提取AI回复，响应结构:', response)
-    return '抱歉，我暂时无法回答您的问题。请联系管理员检查后端配置。'
-  } catch (error: any) {
-    console.error('AI聊天调用失败:', error)
-    console.error('错误详情:', error.response?.data || error.message)
-    console.error('完整错误对象:', JSON.stringify(error, null, 2))
-    
-    // 根据错误类型返回不同的提示
-    if (error.response?.status === 404) {
-      return '抱歉，AI聊天服务接口未找到，请联系管理员检查后端配置。'
-    } else if (error.response?.status === 500) {
-      const errorMsg = error.response?.data?.error?.message || error.response?.data?.message
-      console.error('服务器500错误详情:', errorMsg)
-      return `抱歉，服务器处理请求时出错：${errorMsg || '请稍后再试'}`
-    } else if (error.message?.includes('Network Error')) {
-      return '抱歉，网络连接失败，请检查网络连接后重试。'
-    }
-    
-    return '抱歉，AI助手服务暂时不可用，请稍后再试。'
+  if (!student_id.value) {
+    return '抱歉，无法获取您的身份信息，请刷新页面重试。'
   }
+
+  // 后端 ChatRequest 需要 message 字段，session_id 可选
+  const response = await chatWithAI({
+    message: user_message,
+    session_id: session_id.value || undefined
+  }) as any
+
+  // 响应拦截器已解包，response 即为 {session_id, message, usage}
+  if (response?.session_id) {
+    session_id.value = response.session_id
+  }
+
+  if (typeof response === 'string') {
+    return response
+  }
+
+  if (response?.message) {
+    return response.message
+  }
+
+  return '抱歉，我暂时无法回答您的问题。'
 }
-
-// 检测消息类别
-const detectMessageCategory = (message: string): MessageCategory => {
-  if (message.includes('成果') || message.includes('分析') || message.includes('数据')) {
-    return 'achievement'
-  }
-  if (message.includes('兴趣') || message.includes('推荐') || message.includes('课程')) {
-    return 'interest'
-  }
-  if (message.includes('职业') || message.includes('规划') || message.includes('就业')) {
-    return 'career'
-  }
-  if (message.includes('预警') || message.includes('风险') || message.includes('学情')) {
-    return 'warning'
-  }
-  return 'general'
-}
-
-// 消息类别类型定义
-type MessageCategory = 'achievement' | 'interest' | 'career' | 'warning' | 'general'
-
-// 已移除固定模板回复，统一通过后端接口返回内容
 
 // 格式化消息内容
 const formatMessage = (content: string): string => {

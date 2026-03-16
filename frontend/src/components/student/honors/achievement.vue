@@ -6,7 +6,7 @@
         <div class="title_info">
           <div class="title_row">
             <School :size="24" />
-            <h2>成果展示</h2>
+            <h2>已上传成果</h2>
           </div>
           <p class="desc_text">记录我的成长足迹，展示个人成就</p>
         </div>
@@ -21,99 +21,12 @@
             <template #icon>
               <Scan :size="24" />
             </template>
-            证书识别
+            图片上传
           </n-button>
         </div>
       </div>
     </n-card>
 
-    <!-- 统计展示区域 - 实时统计系统 -->
-    <div class="stats_area">
-      <!-- 总成果数量统计卡片 -->
-      <n-card 
-        class="stat_card total_card"
-        :class="{ 'active': !type_filter }"
-        @click="type_filter = null"
-      >
-        <div class="stat_content">
-          <div class="stat_num">{{ allStats.total_count }}</div>
-          <div class="stat_name">全部成果</div>
-        </div>
-      </n-card>
-      
-      <!-- 竞赛类成果统计 -->
-      <n-card 
-        class="stat_card competition_card"
-        :class="{ 'active': type_filter === '1' }"
-        @click="type_filter = type_filter === '1' ? null : '1'"
-      >
-        <div class="stat_content">
-          <div class="stat_num">{{ allStats.competition_count }}</div>
-          <div class="stat_name">竞赛类</div>
-        </div>
-      </n-card>
-      
-      <!-- 科研类成果统计 -->
-      <n-card 
-        class="stat_card research_card"
-        :class="{ 'active': type_filter === '2' }"
-        @click="type_filter = type_filter === '2' ? null : '2'"
-      >
-        <div class="stat_content">
-          <div class="stat_num">{{ allStats.research_count }}</div>
-          <div class="stat_name">科研类</div>
-        </div>
-      </n-card>
-      
-      <!-- 项目类成果统计 -->
-      <n-card 
-        class="stat_card project_card"
-        :class="{ 'active': type_filter === '3' }"
-        @click="type_filter = type_filter === '3' ? null : '3'"
-      >
-        <div class="stat_content">
-          <div class="stat_num">{{ allStats.project_count }}</div>
-          <div class="stat_name">项目类</div>
-        </div>
-      </n-card>
-      
-      <!-- 论文类成果统计 -->
-      <n-card 
-        class="stat_card paper_card"
-        :class="{ 'active': type_filter === '4' }"
-        @click="type_filter = type_filter === '4' ? null : '4'"
-      >
-        <div class="stat_content">
-          <div class="stat_num">{{ allStats.paper_count }}</div>
-          <div class="stat_name">论文类</div>
-        </div>
-      </n-card>
-      
-      <!-- 专利类成果统计 -->
-      <n-card 
-        class="stat_card patent_card"
-        :class="{ 'active': type_filter === '5' }"
-        @click="type_filter = type_filter === '5' ? null : '5'"
-      >
-        <div class="stat_content">
-          <div class="stat_num">{{ allStats.patent_count }}</div>
-          <div class="stat_name">专利类</div>
-        </div>
-      </n-card>
-      
-
-    <!-- 证书详情模态框 -->
-      <n-card 
-        class="stat_card certificate_card"
-        :class="{ 'active': type_filter === '6' }"
-        @click="type_filter = type_filter === '6' ? null : '6'"
-      >
-        <div class="stat_content">
-          <div class="stat_num">{{ allStats.certificate_count }}</div>
-          <div class="stat_name">证书类</div>
-        </div>
-      </n-card>
-    </div>
 
     <!-- 筛选区域 -->
     <div class="filter_area">
@@ -163,11 +76,6 @@
               查看详情
             </n-button>
             <div>
-              <n-button quaternary size="small" @click="edit_achievement(achievement.id || '')">
-                <template #icon>
-                  <Edit :size="16" />
-                </template>
-              </n-button>
               <n-button quaternary size="small" @click="delete_achievement(achievement.documentId || achievement.id || '')">
                 <template #icon>
                   <Trash :size="16" />
@@ -202,7 +110,6 @@ import {
   IconMusic as Music, 
   IconCalendar as Calendar, 
   IconEye as Eye, 
-  IconEdit as Edit, 
   IconTrash as Trash,
   IconBulb as Bulb,
   IconCertificate as Certificate,
@@ -434,13 +341,18 @@ const year_filter = ref<string | null>(null)
 const level_filter = ref<string | null>(null)
 const type_filter = ref<string | null>(null)
 
-// 筛选选项 - 明确指定类型
-const year_options: SelectOption[] = [
-  { label: '2024年', value: '2024' },
-  { label: '2023年', value: '2023' },
-  { label: '2022年', value: '2022' },
-  { label: '2021年', value: '2021' }
-]
+// 年份选项 - 从成果的上传时间(created_at)动态提取
+const year_options = computed<SelectOption[]>(() => {
+  const years = new Set<string>()
+  for (const item of achievements.value) {
+    if (item.year && /^\d{4}$/.test(item.year)) {
+      years.add(item.year)
+    }
+  }
+  return Array.from(years)
+    .sort((a, b) => Number(b) - Number(a))
+    .map(y => ({ label: `${y}年`, value: y }))
+})
 
 const level_options: SelectOption[] = [
   { label: '国家级', value: 'international' },
@@ -502,7 +414,7 @@ async function fetchAchievementData() {
           title: item.title || item.name || '未知标题',
           category: item.category,
           type_id: item.type_id || item.typeId || item.type || '1',
-          year: item.year || item.awardYear || new Date().getFullYear().toString(),
+          year: (item.date || item.awardedAt || item.awardDate || item.award_date || '').slice(0, 4) || new Date().getFullYear().toString(),
           level: item.level || item.grade || item.rank || 'university',
           prize: item.prize || item.award || item.prizeLevel || item.award_level || '',
           status: item.status || 'pending',
@@ -1047,11 +959,6 @@ const cache_achievements_data = (): void => {
   }
 }
 
-// 编辑成果
-const edit_achievement = (id: string): void => {
-  console.log('编辑成果，ID:', id)
-  router.push(`/student/achievement-edit/${id}`)
-}
 
 // 调试函数 - 测试奖项映射
 const debug_prize_mapping = () => {
@@ -1268,7 +1175,7 @@ const delete_achievement = async (id: string): Promise<void> => {
 }
 
 .ocr_btn {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #1a3a8a 0%, #0d2b6b 100%);
   border: none;
   color: white;
   transition: all 0.3s ease;
@@ -1276,7 +1183,7 @@ const delete_achievement = async (id: string): Promise<void> => {
 
 .ocr_btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 4px 12px rgba(13, 43, 107, 0.4);
 }
 
 .settings_btn {

@@ -434,44 +434,170 @@ async def get_my_certificates(
     })
 
 
+def _build_student_context(student: SysStudent, achievements, db: Session) -> dict:
+    """Build enriched student context with pre-aggregated statistics."""
+    # Type distribution
+    type_map = {"竞赛": 0, "科研": 0, "项目": 0, "论文": 0, "专利": 0, "证书": 0}
+    type_keywords = {
+        "竞赛": ["竞赛", "competition"], "科研": ["科研", "research"],
+        "项目": ["项目", "project"], "论文": ["论文", "paper"],
+        "专利": ["专利", "patent"], "证书": ["证书", "certificate"]
+    }
+    level_dist = {"国家级": 0, "省部级": 0, "市级": 0, "校级": 0, "院级": 0}
+    yearly_trend = {}
+
+    approved_count = 0
+    pending_count = 0
+    rejected_count = 0
+
+    for ach in achievements:
+        # Type classification
+        t = str(ach.type or "").lower()
+        for cn_name, keywords in type_keywords.items():
+            if any(kw in t for kw in keywords):
+                type_map[cn_name] += 1
+                break
+
+        # Status counts
+        if ach.status == AchievementStatus.APPROVED:
+            approved_count += 1
+        elif ach.status == AchievementStatus.PENDING:
+            pending_count += 1
+        elif ach.status == AchievementStatus.REJECTED:
+            rejected_count += 1
+
+        # Level distribution from content_json
+        if ach.content_json and isinstance(ach.content_json, dict):
+            award_level = ach.content_json.get("award_level", "")
+            for level in level_dist:
+                if level in str(award_level):
+                    level_dist[level] += 1
+                    break
+
+        # Yearly trend
+        if ach.created_at:
+            year = str(ach.created_at.year)
+            yearly_trend[year] = yearly_trend.get(year, 0) + 1
+
+    total = len(achievements)
+
+    return {
+        "name": student.name,
+        "major": student.major,
+        "class_name": getattr(student, 'class_name', None),
+        "type_distribution": type_map,
+        "level_distribution": level_dist,
+        "yearly_trend": yearly_trend,
+        "achievements": [
+            {
+                "id": ach.id,
+                "title": ach.title,
+                "type": ach.type,
+                "status": ach.status.value,
+                "content_json": ach.content_json,
+                "evidence_url": ach.evidence_url,
+                "audit_comment": ach.audit_comment,
+                "created_at": ach.created_at.isoformat() if ach.created_at else None,
+                "teacher_name": ach.teacher.name if ach.teacher else None,
+                "teacher_title": ach.teacher.title if ach.teacher else None,
+                "teacher_department": ach.teacher.department if ach.teacher else None,
+            }
+            for ach in achievements
+        ],
+        "statistics": {
+            "total_achievements": total,
+            "approved_achievements": approved_count,
+            "pending_achievements": pending_count,
+            "rejected_achievements": rejected_count,
+            "approval_rate": round(approved_count / total * 100, 2) if total > 0 else 0
+        }
+    }
+
+
+def _get_chat_history_for_student(student_id: int, db: Session, limit: int = 30) -> list:
+    """Get recent chat messages across all sessions for a student."""
+    sessions = db.query(AiChatSession).filter(
+        AiChatSession.student_id == student_id
+    ).all()
+    if not sessions:
+        return []
+
+    session_ids = [s.id for s in sessions]
+    messages = db.query(AiChatMessage).filter(
+        AiChatMessage.session_id.in_(session_ids)
+    ).order_by(AiChatMessage.created_at.desc()).limit(limit).all()
+    messages.reverse()
+
+    return [
+        {"role": msg.role.value, "content": msg.content}
+        for msg in messages
+    ]
+
+
 @router.get("/persona")
 async def get_persona(
     student: SysStudent = Depends(require_student),
     db: Session = Depends(get_db)
 ):
     """
-    Get student persona
-    - Checks cache validity
-    - Regenerates if expired (async task in production)
-    - Returns AI-generated persona data
+    Get student persona.
+    Returns cached persona if available, otherwise checks if chat history exists.
     """
-    # Check if persona cache exists and is valid
-    # For demo, consider cache valid for 7 days
-    needs_regeneration = False
-    
-    if not student.persona_cache:
-        needs_regeneration = True
-    
-    # TODO: Implement actual persona generation using LLM
-    # This would analyze approved achievements and chat history
-    # For now, return cached data or mock data
-    
-    if needs_regeneration:
-        # Mock persona generation
-        # In production, this would be an async task
-        persona_data = {
-            "strengths": ["数学建模", "创新能力"],
-            "achievements_summary": "参与多项竞赛并获奖",
-            "suggested_improvements": ["加强英语能力", "拓展跨学科知识"],
-            "generated_at": datetime.utcnow().isoformat()
-        }
-        
-        student.persona_cache = persona_data
+    # Check if student has achievements (for persona generation)
+    achievement_count = db.query(BizAchievement).filter(
+        BizAchievement.student_id == student.id,
+        BizAchievement.is_deleted == False
+    ).count()
+
+    if student.persona_cache:
+        return success_response(data={
+            "has_achievements": achievement_count > 0,
+            "persona": student.persona_cache
+        })
+
+    return success_response(data={
+        "has_achievements": achievement_count > 0,
+        "persona": None
+    })
+
+
+@router.post("/persona/generate")
+async def generate_persona(
+    student: SysStudent = Depends(require_student),
+    db: Session = Depends(get_db)
+):
+    """
+    Force generate/regenerate student persona using AI.
+    Requires chat history to exist.
+    """
+    from services.ai_chat_service import ai_chat_service
+
+    # Build student context from real achievement data
+    achievements = db.query(BizAchievement).filter(
+        BizAchievement.student_id == student.id,
+        BizAchievement.is_deleted == False
+    ).order_by(BizAchievement.created_at.desc()).all()
+
+    if not achievements:
+        return error_response(msg="暂无成果数据，请先提交成果后再生成画像", code=400)
+
+    student_context = _build_student_context(student, achievements, db)
+
+    # Chat history is optional, used as supplementary context
+    chat_history = _get_chat_history_for_student(student.id, db, limit=30)
+
+    # Generate persona based on real data + optional chat history
+    result = ai_chat_service.generate_persona(student_context, chat_history if chat_history else None)
+
+    if result.get("success") and result.get("data"):
+        student.persona_cache = result["data"]
         db.commit()
+        return success_response(data={
+            "has_chat_history": True,
+            "persona": result["data"]
+        })
     else:
-        persona_data = student.persona_cache
-    
-    return success_response(data=persona_data)
+        return error_response(msg="画像生成失败，请稍后重试", code=500)
 
 
 @router.post("/ai/chat")
@@ -536,58 +662,14 @@ async def ai_chat(
         for msg in history_messages[:-1]
     ] if len(history_messages) > 1 else []
     
-    # Retrieve all achievements for comprehensive AI analysis (not just approved)
-    # 查询所有状态的成果，让AI能够全面分析学生情况
+    # Retrieve all achievements for comprehensive AI analysis
     achievements = db.query(BizAchievement).filter(
         BizAchievement.student_id == student.id,
-        BizAchievement.is_deleted == False  # 排除已删除的
-    ).order_by(BizAchievement.created_at.desc()).all()  # 移除20条限制，获取所有成果
-    
-    # Count achievements by status for statistics
-    approved_count = sum(1 for ach in achievements if ach.status == AchievementStatus.APPROVED)
-    pending_count = sum(1 for ach in achievements if ach.status == AchievementStatus.PENDING)
-    rejected_count = sum(1 for ach in achievements if ach.status == AchievementStatus.REJECTED)
-    
-    # Build student context with complete achievement data
-    student_context = {
-        "name": student.name,
-        "major": student.major,
-        "class_name": getattr(student, 'class_name', None),
-        "achievements": [
-            {
-                # 基本信息
-                "id": ach.id,
-                "title": ach.title,
-                "type": ach.type,
-                "status": ach.status.value,
-                
-                # 详细内容（OCR识别的结构化数据）
-                "content_json": ach.content_json,
-                
-                # 证书相关
-                "evidence_url": ach.evidence_url,
-                
-                # 审核信息
-                "audit_comment": ach.audit_comment,
-                
-                # 时间信息
-                "created_at": ach.created_at.isoformat() if ach.created_at else None,
-                
-                # 教师信息（如果需要）
-                "teacher_name": ach.teacher.name if ach.teacher else None,
-                "teacher_title": ach.teacher.title if ach.teacher else None,
-                "teacher_department": ach.teacher.department if ach.teacher else None,
-            }
-            for ach in achievements
-        ],
-        "statistics": {
-            "total_achievements": len(achievements),
-            "approved_achievements": approved_count,
-            "pending_achievements": pending_count,
-            "rejected_achievements": rejected_count,
-            "approval_rate": round(approved_count / len(achievements) * 100, 2) if len(achievements) > 0 else 0
-        }
-    }
+        BizAchievement.is_deleted == False
+    ).order_by(BizAchievement.created_at.desc()).all()
+
+    # Build enriched student context
+    student_context = _build_student_context(student, achievements, db)
     
     # Call AI chat service
     ai_result = ai_chat_service.chat(
@@ -666,24 +748,28 @@ async def get_student_profile(
     """
     user = student.user
     
-    # 统计成果数量
+    # 统计成果数量（排除已删除）
     total_achievements = db.query(BizAchievement).filter(
-        BizAchievement.student_id == student.id
+        BizAchievement.student_id == student.id,
+        BizAchievement.is_deleted == False
     ).count()
-    
+
     approved_achievements = db.query(BizAchievement).filter(
         BizAchievement.student_id == student.id,
+        BizAchievement.is_deleted == False,
         BizAchievement.status == AchievementStatus.APPROVED
     ).count()
-    
+
     pending_achievements = db.query(BizAchievement).filter(
         BizAchievement.student_id == student.id,
+        BizAchievement.is_deleted == False,
         BizAchievement.status == AchievementStatus.PENDING
     ).count()
-    
-    # 获取最近的成果
+
+    # 获取最近的成果（排除已删除）
     recent_achievements = db.query(BizAchievement).filter(
-        BizAchievement.student_id == student.id
+        BizAchievement.student_id == student.id,
+        BizAchievement.is_deleted == False
     ).order_by(BizAchievement.created_at.desc()).limit(5).all()
     
     return success_response(data={
@@ -715,3 +801,45 @@ async def get_student_profile(
         ]
     })
 
+
+@router.put("/avatar")
+async def update_avatar(
+    file: UploadFile = File(...),
+    student: SysStudent = Depends(require_student),
+    db: Session = Depends(get_db)
+):
+    """
+    更新用户头像
+    """
+    import os
+    from pathlib import Path
+
+    # 验证文件类型
+    allowed_types = ["image/jpeg", "image/png", "image/gif", "image/webp"]
+    if file.content_type not in allowed_types:
+        raise HTTPException(status_code=400, detail="仅支持 JPG/PNG/GIF/WEBP 格式的图片")
+
+    # 限制文件大小 (2MB)
+    contents = await file.read()
+    if len(contents) > 2 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="图片大小不能超过 2MB")
+
+    # 生成唯一文件名
+    ext = os.path.splitext(file.filename or "avatar.jpg")[1] or ".jpg"
+    unique_name = f"avatar_{student.user_id}_{uuid.uuid4().hex[:8]}{ext}"
+
+    # 保存到 uploads/avatars 目录
+    avatar_dir = Path(settings.UPLOAD_DIR) / "avatars"
+    avatar_dir.mkdir(parents=True, exist_ok=True)
+
+    file_path = avatar_dir / unique_name
+    with open(file_path, "wb") as f:
+        f.write(contents)
+
+    # 更新数据库
+    avatar_url = f"/uploads/avatars/{unique_name}"
+    user = student.user
+    user.avatar_url = avatar_url
+    db.commit()
+
+    return success_response(data={"avatar_url": avatar_url})
