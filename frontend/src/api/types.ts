@@ -90,6 +90,12 @@ export interface RecognizedData {
     author_order?: string
     doi?: string
     issn?: string
+    // 英文论文中文映射
+    paper_title_cn?: string
+    journal_name_cn?: string
+    authors_cn?: string[]
+    first_author_cn?: string
+    issuing_organization_cn?: string
     role?: string
     location?: string
     // 专利专属
@@ -161,7 +167,7 @@ export interface Achievement {
 }
 
 export interface AchievementCreateRequest {
-    teacher_id: number
+    teacher_id?: number
     title: string
     type: AchievementType
     content_json?: Record<string, any>

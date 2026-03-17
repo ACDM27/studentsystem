@@ -76,7 +76,7 @@ class BizAchievement(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     student_id = Column(Integer, ForeignKey("sys_students.id"), nullable=False, index=True)
-    teacher_id = Column(Integer, ForeignKey("sys_teachers.id"), nullable=False, index=True)
+    teacher_id = Column(Integer, ForeignKey("sys_teachers.id"), nullable=True, index=True)
     title = Column(String(200), nullable=False)
     type = Column(String(50), nullable=False)  # 字典值
     content_json = Column(JSON)  # OCR识别后的结构化详情

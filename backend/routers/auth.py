@@ -20,11 +20,11 @@ async def login(request: LoginRequest, db: Session = Depends(get_db)):
     - Refresh token: long-lived, for renewing access tokens
     - Auto-upgrades legacy Bcrypt passwords to Argon2 on successful login
     """
-    # Find user
+    # 查找用户
     user = db.query(SysUser).filter(SysUser.username == request.username).first()
     
     if not user or not verify_password(request.password, user.password_hash):
-        return error_response(msg="Invalid username or password", code=401)
+        return error_response(msg="学号或密码不正确", code=401)
     
     # Auto-upgrade legacy Bcrypt password to Argon2
     # This happens transparently when user logs in with old password

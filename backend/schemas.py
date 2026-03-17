@@ -109,7 +109,7 @@ class TeacherResponse(BaseModel):
 # ============= Achievement Models =============
 class AchievementCreate(BaseModel):
     title: str
-    teacher_id: int
+    teacher_id: Optional[int] = None
     type: str
     content_json: Optional[Dict] = None
     evidence_url: Optional[str] = None

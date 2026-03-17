@@ -283,34 +283,40 @@ class CertificateRecognitionServiceOpenAI:
 - paper_title 必须是论文的完整标题，禁止填写"学术论文"等泛指词汇
 - authors 必须列出文件中出现的所有作者姓名
 - journal_level 请根据期刊名称/ISSN/版权页信息判断，尽量准确
+- 如果论文是英文的，必须同时提供中文翻译字段（_cn后缀），用于中文检索
 
 【返回格式】
 请严格按照以下JSON格式返回，不要添加任何其他文字：
 
 {
-    "paper_title": "论文完整标题",
-    "journal_name": "期刊或会议完整名称",
+    "paper_title": "论文完整标题（保留原文）",
+    "journal_name": "期刊或会议完整名称（保留原文）",
     "journal_level": "SCI",
     "publish_status": "已发表",
     "publish_date": "2024-06",
     "authors": ["作者1", "作者2"],
-    "first_author": "第一作者姓名",
+    "first_author": "第一作者姓名（保留原文）",
     "author_order": "第一作者",
     "doi": null,
     "volume": null,
     "issue": null,
     "pages": null,
     "issn": null,
-    "issuing_organization": null
+    "issuing_organization": null,
+    "paper_title_cn": "论文标题的中文翻译",
+    "journal_name_cn": "期刊名称的中文翻译",
+    "authors_cn": ["作者1中文名", "作者2中文名"],
+    "first_author_cn": "第一作者中文名",
+    "issuing_organization_cn": "出版机构中文翻译"
 }
 
 【字段说明】
 - journal_level：从以下选项中选一个：SCI、EI、北大核心、CSSCI、CSCD、普通期刊、会议论文
 - publish_status：从以下选项中选一个：已发表、录用待刊、在审中
-- author_order：根据作者列表排列顺序判断，从以下选项中选一个：第一作者、通讯作者、第二作者、其他作者
-  （如果无法判断，填"第一作者"）
+- author_order：仅当图片中能明确看出作者排序信息时，从以下选项中选一个：第一作者、通讯作者、第二作者、其他作者。如果图片中无法确定作者排序（如录用通知截图），填null
 - publish_date：格式尽量为 YYYY-MM-DD 或 YYYY-MM 或 YYYY
 - authors：所有作者姓名组成的数组，不要遗漏
+- _cn 后缀字段：仅当论文为英文时必填，提供对应字段的中文翻译。中国人名拼音请还原为中文姓名。如果论文本身是中文，_cn字段填null
 - 无法识别的字段用 null
 
 只返回JSON，不要有任何解释性文字。"""
@@ -331,7 +337,7 @@ class CertificateRecognitionServiceOpenAI:
                     ]
                 }],
                 temperature=0.1,
-                max_tokens=800
+                max_tokens=1200
             )
 
             content = completion.choices[0].message.content
@@ -373,6 +379,85 @@ class CertificateRecognitionServiceOpenAI:
                 "success": False,
                 "error": f"Unexpected error: {str(e)}"
             }
+
+    def _is_english(self, text: str) -> bool:
+        """判断文本是否主要为英文"""
+        if not text:
+            return False
+        # 统计英文字母占比
+        alpha_count = sum(1 for c in text if c.isascii() and c.isalpha())
+        total_chars = sum(1 for c in text if c.isalpha())
+        if total_chars == 0:
+            return False
+        return alpha_count / total_chars > 0.7
+
+    def _translate_paper_to_chinese(self, paper_data: Dict) -> Dict:
+        """
+        对英文论文的关键字段进行中文翻译，添加 _cn 后缀字段。
+        翻译字段：paper_title, journal_name, authors, first_author, issuing_organization
+        """
+        fields_to_translate = {
+            "paper_title": paper_data.get("paper_title", ""),
+            "journal_name": paper_data.get("journal_name", ""),
+            "first_author": paper_data.get("first_author", ""),
+            "issuing_organization": paper_data.get("issuing_organization", ""),
+        }
+
+        # 收集需要翻译的英文字段
+        english_fields = {k: v for k, v in fields_to_translate.items() if self._is_english(str(v))}
+
+        # 检查 authors 列表
+        authors = paper_data.get("authors", [])
+        has_english_authors = isinstance(authors, list) and any(self._is_english(str(a)) for a in authors)
+
+        if not english_fields and not has_english_authors:
+            return paper_data  # 全是中文，无需翻译
+
+        # 构建翻译请求
+        translate_input = {}
+        for k, v in english_fields.items():
+            translate_input[k] = v
+        if has_english_authors:
+            translate_input["authors"] = authors
+
+        try:
+            text_client = OpenAI(api_key=self.api_key, base_url=self.base_url)
+            prompt = f"""请将以下英文学术论文信息翻译为中文。对于人名请音译为常见中文译名，如果是中国人名的拼音则还原为中文姓名。
+
+输入：
+{json.dumps(translate_input, ensure_ascii=False)}
+
+请严格按照相同的JSON key返回翻译结果，不要添加任何其他文字。只返回JSON。"""
+
+            completion = text_client.chat.completions.create(
+                model=settings.QWEN_MODEL_NAME,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.1,
+                max_tokens=500
+            )
+
+            content = completion.choices[0].message.content
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0].strip()
+            elif "```" in content:
+                content = content.split("```")[1].split("```")[0].strip()
+
+            translated = json.loads(content)
+
+            # 将翻译结果写入 _cn 后缀字段
+            for key in ["paper_title", "journal_name", "first_author", "issuing_organization"]:
+                if key in translated:
+                    paper_data[f"{key}_cn"] = translated[key]
+
+            if "authors" in translated and isinstance(translated["authors"], list):
+                paper_data["authors_cn"] = translated["authors"]
+
+        except Exception as e:
+            # 翻译失败不影响主流程
+            import logging
+            logging.getLogger(__name__).warning(f"Paper translation failed: {e}")
+
+        return paper_data
 
     def _preprocess_image(self, image_path: str) -> str:
         """纠偏 + 增强图片，返回处理后的图片路径（失败则返回原路径）"""
@@ -512,6 +597,12 @@ class CertificateRecognitionServiceOpenAI:
                 "pages": data.get("pages"),
                 "issn": data.get("issn"),
                 "issuing_organization": (data.get("issuing_organization") or "").strip(),
+                # 英文论文中文映射字段
+                "paper_title_cn": data.get("paper_title_cn"),
+                "journal_name_cn": data.get("journal_name_cn"),
+                "authors_cn": data.get("authors_cn"),
+                "first_author_cn": data.get("first_author_cn"),
+                "issuing_organization_cn": data.get("issuing_organization_cn"),
                 # Compatibility fields used by existing frontend
                 "category": "paper",
                 "certificate_name": paper_title or "学术论文",

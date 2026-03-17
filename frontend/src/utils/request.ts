@@ -14,7 +14,7 @@ interface FastAPIResponse<T = any> {
 
 // 创建axios实例
 const request: AxiosInstance = axios.create({
-    baseURL: import.meta.env.VITE_API_BASE_URL ?? '',
+    baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000',
     timeout: 30000,
     headers: {
         'Content-Type': 'application/json'
@@ -53,8 +53,6 @@ request.interceptors.request.use(
 request.interceptors.response.use(
     (response: AxiosResponse<FastAPIResponse>) => {
         const { code, msg, data } = response.data
-
-        console.log(`[API] 响应成功:`, { code, msg, dataType: typeof data })
 
         // FastAPI成功响应：code === 200
         if (code === 200) {
@@ -114,7 +112,7 @@ request.interceptors.response.use(
                 break
 
             case 500:
-                ElMessage.error('服务器内部错误')
+                ElMessage.error('服务器内部错误，请检查后端服务是否正常运行')
                 break
 
             default:

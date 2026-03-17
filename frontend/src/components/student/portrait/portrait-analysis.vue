@@ -10,8 +10,15 @@
         </template>
         <div class="personal-content">
           <div class="avatar-section">
-            <n-avatar :size="80" :src="student_avatar" class="main-avatar">
-              {{ student_name.charAt(0) }}
+            <n-avatar
+              round
+              :size="80"
+              :src="student_avatar"
+              class="main-avatar"
+            >
+              <template #fallback>
+                <n-icon size="40"><IconUser /></n-icon>
+              </template>
             </n-avatar>
           </div>
           <div class="info-section">
@@ -164,21 +171,39 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { NCard, NAvatar, NButton, useMessage } from 'naive-ui'
+import { NCard, NAvatar, NButton, NIcon, useMessage } from 'naive-ui'
+import { IconUser } from '../../../utils/icons'
 import {
   getStudentPersona,
   generateStudentPersona,
   getStudentMe as fetchStudentMe,
-  getMyAchievements as fetchAchievements
+  getMyAchievements as fetchAchievements,
+  getStudentProfile as fetchStudentProfile
 } from '@/api'
 
 const message = useMessage()
 
 // Student info
-const student_name = ref('')
-const student_avatar = ref('')
-const student_major = ref('')
-const student_number = ref('')
+const profileData = ref<any>({})
+const student_avatar_raw = ref('') // 使用独立的 ref 确保稳定性
+const loading = ref(true)
+
+// 默认人员头像
+const default_avatar = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23e0e0e0"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>'
+
+const student_avatar = computed(() => {
+  const url = student_avatar_raw.value
+  if (!url) return default_avatar
+  if (url.startsWith('/uploads/')) {
+    const token = localStorage.getItem('token')
+    return url + (token ? `?token=${token}` : '')
+  }
+  return url
+})
+
+const student_name = computed(() => profileData.value.basic_info?.name || profileData.value.basic_info?.username || '学生')
+const student_major = computed(() => profileData.value.basic_info?.major || '未设置')
+const student_number = computed(() => profileData.value.basic_info?.student_id || '未设置')
 
 // Achievement data
 const achievementData = ref({
@@ -193,17 +218,16 @@ const personaLoading = ref(false)
 // --- Init ---
 const initializeUser = async () => {
   try {
-    const resp = await fetchStudentMe()
-    // 响应拦截器已解包，resp 即为 data 对象
+    loading.value = true
+    const resp = await fetchStudentProfile()
     if (resp) {
-      const data = resp as any
-      student_name.value = data.name || data.username || '未知用户'
-      student_avatar.value = data.avatar_url || ''
-      student_major.value = data.major || ''
-      student_number.value = data.student_id || ''
+      profileData.value = resp
+      student_avatar_raw.value = resp.basic_info?.avatar_url || ''
     }
   } catch (e) {
-    console.error('获取用户信息失败:', e)
+    console.error('获取个人档案失败:', e)
+  } finally {
+    loading.value = false
   }
 }
 
@@ -319,10 +343,28 @@ const formatTime = (timestamp: string) => {
   }
 }
 
+// --- Global Event Listeners ---
+const handleGlobalAvatarUpdate = (e: any) => {
+  if (e.detail && e.detail.url) {
+    student_avatar_raw.value = e.detail.url
+    // 同时更新 profileData 内部数据以保持连贯
+    if (profileData.value.basic_info) {
+      profileData.value.basic_info.avatar_url = e.detail.url
+    }
+  }
+}
+
+import { onUnmounted } from 'vue'
+
 // --- Mount ---
 onMounted(async () => {
+  window.addEventListener('avatar-updated', handleGlobalAvatarUpdate)
   await initializeUser()
   await Promise.all([fetchAchievementCounts(), loadPersona()])
+})
+
+onUnmounted(() => {
+  window.removeEventListener('avatar-updated', handleGlobalAvatarUpdate)
 })
 </script>
 
@@ -380,7 +422,9 @@ onMounted(async () => {
 }
 
 .main-avatar {
-  border: 3px solid #f0f0f0;
+  border: 3px solid #fff;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  background-color: #f0f0f0;
 }
 
 .info-section {

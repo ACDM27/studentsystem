@@ -24,7 +24,7 @@
         <!-- 标题与状态 -->
         <n-card class="info_card">
           <div class="title_row">
-            <h3>{{ detail.title }}</h3>
+            <h3>{{ detail.content_json?.paper_title_cn || detail.title }}</h3>
             <n-tag :type="status_tag.type" size="medium">{{ status_tag.text }}</n-tag>
           </div>
           <div class="type_badge">
@@ -40,14 +40,33 @@
               <span class="label">获奖/发表日期</span>
               <span class="value">{{ format_date(content.date || content.publish_date || content.patent_date || detail.awardedAt) }}</span>
             </div>
-            <div class="info_item" v-if="content.award">
-              <span class="label">奖项</span>
-              <span class="value">{{ award_label(content.award) }}</span>
+            <div class="info_item" v-if="content.award || content.patent_type">
+              <span class="label">{{ (detail.type === 'patent' || detail.type === '5') ? '专利类型' : '奖项' }}</span>
+              <span class="value">{{ award_label(content.award || content.patent_type) }}</span>
             </div>
             <div class="info_item" v-if="content.level || content.award_level || detail.level">
               <span class="label">成果级别</span>
               <span class="value">{{ level_label(content.level || content.award_level || detail.level) }}</span>
             </div>
+            <!-- 专利专属字段并入基本信息 -->
+            <template v-if="detail.type === 'patent' || detail.type === '5'">
+              <div class="info_item" v-if="content.patent_number">
+                <span class="label">专利号/登记号</span>
+                <span class="value" style="font-family: monospace;">{{ content.patent_number }}</span>
+              </div>
+              <div class="info_item" v-if="content.patent_status">
+                <span class="label">专利状态</span>
+                <span class="value">{{ patent_status_label(content.patent_status) }}</span>
+              </div>
+              <div class="info_item" v-if="content.patent_inventors">
+                <span class="label">发明人/著作权人</span>
+                <span class="value">{{ content.patent_inventors }}</span>
+              </div>
+              <div class="info_item" v-if="content.patent_holder">
+                <span class="label">专利权人单位</span>
+                <span class="value">{{ content.patent_holder }}</span>
+              </div>
+            </template>
             <div class="info_item" v-if="content.tutor_name">
               <span class="label">指导教师</span>
               <span class="value">{{ content.tutor_name }}<template v-if="content.tutor_department">（{{ content.tutor_department }}）</template></span>
@@ -56,7 +75,7 @@
         </n-card>
 
         <!-- 论文专属信息 -->
-        <n-card v-if="detail.type === 'paper'" class="info_card" title="论文信息">
+        <n-card v-if="detail.type === 'paper' || detail.type === '4'" class="info_card" title="论文信息">
           <div class="info_grid">
             <div class="info_item" v-if="content.journal_name">
               <span class="label">期刊/会议</span>
@@ -87,31 +106,7 @@
           </div>
         </n-card>
 
-        <!-- 专利专属信息 -->
-        <n-card v-if="detail.type === 'patent'" class="info_card" title="专利信息">
-          <div class="info_grid">
-            <div class="info_item" v-if="content.patent_type">
-              <span class="label">专利类型</span>
-              <span class="value">{{ content.patent_type }}</span>
-            </div>
-            <div class="info_item" v-if="content.patent_number">
-              <span class="label">专利号/登记号</span>
-              <span class="value" style="font-family: monospace;">{{ content.patent_number }}</span>
-            </div>
-            <div class="info_item" v-if="content.patent_status">
-              <span class="label">专利状态</span>
-              <span class="value">{{ patent_status_label(content.patent_status) }}</span>
-            </div>
-            <div class="info_item" v-if="content.patent_inventors">
-              <span class="label">发明人/著作权人</span>
-              <span class="value">{{ content.patent_inventors }}</span>
-            </div>
-            <div class="info_item" v-if="content.patent_holder">
-              <span class="label">专利权人单位</span>
-              <span class="value">{{ content.patent_holder }}</span>
-            </div>
-          </div>
-        </n-card>
+
 
         <!-- 竞赛/证书专属 - 团队成员 -->
         <n-card v-if="content.team_members && content.team_members.length" class="info_card" title="团队成员">

@@ -72,6 +72,16 @@ export function uploadFile(file: File): Promise<UploadFileResponse> {
     return request.post('/api/v1/common/upload', formData)
 }
 
+/**
+ * 更新用户头像
+ * PUT /api/v1/student/avatar
+ */
+export function updateAvatar(file: File): Promise<any> {
+    const formData = new FormData()
+    formData.append('file', file)
+    return request.put('/api/v1/student/avatar', formData)
+}
+
 // ==================== 学生端API ====================
 
 /**
@@ -151,8 +161,16 @@ export function chatWithAI(data: ChatRequest): Promise<ChatResponse> {
  * 获取学生画像
  * GET /api/v1/student/persona
  */
-export function getStudentPersona(): Promise<StudentPersonaResponse> {
+export function getStudentPersona(): Promise<any> {
     return request.get('/api/v1/student/persona')
+}
+
+/**
+ * 生成/重新生成学生AI画像
+ * POST /api/v1/student/persona/generate
+ */
+export function generateStudentPersona(): Promise<any> {
+    return request.post('/api/v1/student/persona/generate')
 }
 
 /**
@@ -411,6 +429,7 @@ export default {
     // 公共
     getTeachers,
     uploadFile,
+    updateAvatar,
     // 学生
     getStudentMe,
     getStudentProfile,

@@ -4,10 +4,12 @@
     <div class="dashboard-header">
       <div class="user-info-section">
         <div class="user-avatar">
-          <n-avatar size="large" round>
-            <n-icon size="30">
-              <User />
-            </n-icon>
+          <n-avatar size="large" round :src="avatarDisplayUrl">
+            <template #fallback>
+              <n-icon size="30">
+                <User />
+              </n-icon>
+            </template>
           </n-avatar>
         </div>
         <div class="user-details">
@@ -163,6 +165,18 @@ const userInfo = ref({
   username: ''
 })
 const userLoading = ref(false)
+const user_avatar = ref('')
+
+const default_avatar = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23e0e0e0"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>'
+
+const avatarDisplayUrl = computed(() => {
+  if (!user_avatar.value) return default_avatar
+  if (user_avatar.value.startsWith('/uploads/')) {
+    const token = localStorage.getItem('token')
+    return user_avatar.value + (token ? `?token=${token}` : '')
+  }
+  return user_avatar.value
+})
 
 // 当前学期
 const currentSemester = ref('2023-2024学年第二学期')
@@ -295,7 +309,7 @@ const fetchUserInfo = async () => {
       userInfo.value.username = userResponse.username || ''
       userInfo.value.email = userResponse.email || ''
       // 优先使用后端返回的 name 字段（档案姓名）
-      userInfo.value.name = userResponse.name || userResponse.username || '用户'
+      userInfo.value.name = userResponse.name || userResponse.username || '学生'
       
       console.log('Dashboard: 设置基本用户信息:', {
         username: userInfo.value.username,
@@ -322,6 +336,10 @@ const fetchUserInfo = async () => {
         if (profileResponse.basic_info.student_id) {
           userInfo.value.student_id = profileResponse.basic_info.student_id
           console.log('Dashboard: 设置学号:', userInfo.value.student_id)
+        }
+        if (profileResponse.basic_info.avatar_url) {
+          user_avatar.value = profileResponse.basic_info.avatar_url
+          console.log('Dashboard: 设置用户头像:', user_avatar.value)
         }
         if (profileResponse.basic_info.college) {
           userInfo.value.college = profileResponse.basic_info.college
@@ -357,7 +375,7 @@ const fetchUserInfo = async () => {
       console.warn('Dashboard: 用户未登录，显示默认信息')
       userInfo.value.name = '未登录用户'
     } else {
-      userInfo.value.name = '用户'
+      userInfo.value.name = '学生'
     }
   } finally {
     userLoading.value = false

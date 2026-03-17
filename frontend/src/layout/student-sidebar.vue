@@ -47,11 +47,12 @@
             <n-avatar
               round
               size="medium"
-              :src="user_avatar"
-              fallback-src=""
+              :src="avatarDisplayUrl"
               style="background-color: #409eff;"
             >
-              {{ username.charAt(0) }}
+              <template #fallback>
+                <n-icon size="20"><IconUser /></n-icon>
+              </template>
             </n-avatar>
           </div>
           <div class="user-detail">
@@ -79,9 +80,11 @@ import {
   IconLogout,
   IconSettings,
   IconSchool,
+  IconCamera,
   CaretDown
 } from '../utils/icons'
-import { getStudentMe, getStudentProfile } from '@/api'
+import { getStudentMe, getStudentProfile, updateAvatar } from '@/api'
+import { useMessage } from 'naive-ui'
 
 const router = useRouter()
 const route = useRoute()
@@ -90,13 +93,35 @@ const username = computed(() => user_name.value)
 const user_role = ref('学生')
 const user_avatar = ref('')
 const user_email = ref('')
+const user_confirmed = ref(false)
+const user_blocked = ref(false)
 const activeMenu = ref('achievement')
 const loading = ref(false)
+
+const msg = useMessage()
+
+// 默认人员头像
+const default_avatar = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23e0e0e0"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>'
+
+// 头像显示URL：有自定义头像则用，否则返回空让fallback生效
+const avatarDisplayUrl = computed(() => {
+  if (!user_avatar.value) return default_avatar
+  // 如果是相对路径，拼上后端地址
+  if (user_avatar.value.startsWith('/uploads/')) {
+    const token = localStorage.getItem('token')
+    return user_avatar.value + (token ? `?token=${token}` : '')
+  }
+  return user_avatar.value
+})
+
+// 触发头像文件选择（逻辑移除）
+
 
 const menu_items = ref([
   { label: '成果收集与展示', key: 'achievement', icon: () => h(IconAward) },
   { label: 'AI智能分析', key: 'portrait_analysis', icon: () => h(IconChartBar) },
-  { label: 'AI对话助手', key: 'portrait_chat', icon: () => h(IconMessageCircle) }
+  { label: 'AI学习助手', key: 'portrait_chat', icon: () => h(IconMessageCircle) },
+  { label: '个人资料', key: 'profile', icon: () => h(IconUser) }
 ])
 
 /* ---------- 用户下拉 ---------- */
@@ -104,14 +129,7 @@ const user_options = ref([
   { 
     label: '个人资料', 
     key: 'profile', 
-    icon: () => h(IconUser),
-    props: { onClick: () => console.log('个人资料') }
-  },
-  { 
-    label: '系统设置', 
-    key: 'settings', 
-    icon: () => h(IconSettings),
-    props: { onClick: () => console.log('系统设置') }
+    icon: () => h(IconUser)
   },
   { 
     type: 'divider' 
@@ -119,8 +137,7 @@ const user_options = ref([
   { 
     label: '退出登录', 
     key: 'logout', 
-    icon: () => h(IconLogout),
-    props: { onClick: () => handleLogout() }
+    icon: () => h(IconLogout)
   }
 ])
 
@@ -222,9 +239,25 @@ onMounted(() => {
 })
 
 /* ---------- 监听路由变化 ---------- */
+// 侧边栏监听全局头像更新事件
+const handleGlobalAvatarUpdate = (e: any) => {
+  if (e.detail && e.detail.url) {
+    user_avatar.value = e.detail.url
+  }
+}
+
 watch(() => route.path, () => {
   updateActiveMenu()
 }, { immediate: true })
+
+onMounted(() => {
+  window.addEventListener('avatar-updated', handleGlobalAvatarUpdate)
+})
+
+import { onUnmounted } from 'vue'
+onUnmounted(() => {
+  window.removeEventListener('avatar-updated', handleGlobalAvatarUpdate)
+})
 
 /* ---------- 更新活跃菜单 ---------- */
 function updateActiveMenu() {
@@ -235,8 +268,8 @@ function updateActiveMenu() {
     '/student/achievement-detail': 'achievement',
     '/student/certificate-ocr': 'achievement',
     '/student/portrait': 'portrait_analysis',
-    '/student/portrait/chat': 'portrait_chat',
-    '/student/portrait/ai-chat': 'portrait_chat'
+    '/student/portrait/ai-chat': 'portrait_chat',
+    '/student/profile': 'profile'
   }
 
   activeMenu.value = routeMap[path] || 'achievement'
@@ -249,7 +282,8 @@ function handleMenuClick(key: string) {
   const routeMap: Record<string, string> = {
     achievement: '/student/achievement',
     portrait_analysis: '/student/portrait',
-    portrait_chat: '/student/portrait/chat'
+    portrait_chat: '/student/portrait/ai-chat',
+    profile: '/student/profile'
   }
   
   if (routeMap[key]) {
@@ -262,6 +296,8 @@ function handleMenuClick(key: string) {
 function handleUserSelect(key: string) {
   if (key === 'logout') {
     handleLogout()
+  } else if (key === 'profile') {
+    router.push('/student/profile')
   }
 }
 
@@ -442,6 +478,13 @@ function handleLogout() {
 .user-avatar {
   margin-right: 12px;
   position: relative;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  transition: all 0.3s ease;
+}
+
+.user-avatar:hover {
+  box-shadow: 0 0 0 3px rgba(64, 158, 255, 0.4);
 }
 
 .user-avatar::after {
@@ -454,6 +497,32 @@ function handleLogout() {
   background: #67c23a;
   border: 2px solid #304156;
   border-radius: 50%;
+}
+
+.avatar-edit-hint {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 16px;
+  height: 16px;
+  background: #409eff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  border: 1.5px solid #304156;
+  opacity: 0;
+  transition: opacity 0.2s;
+  z-index: 1;
+}
+
+.user-avatar:hover .avatar-edit-hint {
+  opacity: 1;
+}
+
+.user-avatar {
+  cursor: pointer;
 }
 
 .user-detail {

@@ -62,9 +62,6 @@
           </n-form-item>
         </n-form>
 
-        <div class="login-footer">
-          <n-button text class="forget-btn">忘记密码？联系管理员重置</n-button>
-        </div>
       </div>
     </div>
 
@@ -210,7 +207,8 @@ const handleLogin = () => {
         setTimeout(() => router.push('/student/achievement'), 300)
       }
     } catch (e: any) {
-      message.error(e.message || '学号或密码不正确')
+      const msg = e?.response?.data?.msg || e.message || '登录失败，请检查学号和密码是否正确'
+      message.error(msg)
     } finally {
       loading.value = false
     }

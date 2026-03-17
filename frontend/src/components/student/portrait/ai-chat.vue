@@ -9,6 +9,21 @@
         <h2 class="header-title">AI学习助手</h2>
         <span class="header-subtitle">个性化学习分析与建议</span>
       </div>
+      <div class="header-actions">
+        <n-space>
+          <n-button quaternary size="small" @click="startNewChat">
+            <template #icon>
+              <n-icon><IconPlus /></n-icon>
+            </template>
+            开启新对话
+          </n-button>
+          <n-button quaternary circle @click="show_history = true">
+            <template #icon>
+              <n-icon size="20"><IconHistory /></n-icon>
+            </template>
+          </n-button>
+        </n-space>
+      </div>
     </div>
 
     <!-- 聊天消息区域 -->
@@ -27,7 +42,6 @@
                 <n-tag type="info" size="small">学习分析</n-tag>
                 <n-tag type="success" size="small">兴趣推荐</n-tag>
                 <n-tag type="warning" size="small">职业规划</n-tag>
-                <n-tag type="error" size="small">学情预警</n-tag>
               </div>
             </div>
           </div>
@@ -114,17 +128,6 @@
           </template>
           职业规划
         </n-button>
-        <n-button
-          size="small"
-          type="error"
-          ghost
-          @click="sendQuickMessage('检查我的学习预警情况')"
-        >
-          <template #icon>
-            <n-icon><IconHelpCircle /></n-icon>
-          </template>
-          学情预警
-        </n-button>
       </n-space>
     </div>
 
@@ -154,18 +157,73 @@
         </n-button>
       </div>
     </div>
+<!-- 历史对话查询弹窗 (Claude Code 风格) -->
+    <n-modal
+      v-model:show="show_history"
+      preset="card"
+      style="width: 600px; max-width: 90vw;"
+      title="对话历史"
+      :bordered="false"
+      size="huge"
+    >
+      <div class="history-search">
+        <n-input
+          v-model:value="search_keyword"
+          placeholder="搜索消息内容..."
+          clearable
+        >
+          <template #prefix>
+            <n-icon><IconSearch /></n-icon>
+          </template>
+        </n-input>
+      </div>
+      
+      <div class="history-list-wrapper">
+        <n-scrollbar style="max-height: 400px;">
+          <n-list hoverable clickable>
+            <n-empty v-if="filtered_history.length === 0" description="暂无匹配的历史记录" />
+            <n-list-item
+              v-for="msg in filtered_history"
+              :key="msg.id"
+              class="history-item"
+            >
+              <div class="history-item-content">
+                <div class="history-item-header">
+                  <span class="history-item-time">{{ formatSimpleDate(msg.timestamp) }}</span>
+                </div>
+                <div class="history-item-text">{{ msg.content }}</div>
+              </div>
+            </n-list-item>
+          </n-list>
+        </n-scrollbar>
+      </div>
+      
+      <div class="history-footer">
+        <n-button secondary type="error" size="small" @click="clearHistory">
+          <template #icon>
+            <n-icon><IconTrash /></n-icon>
+          </template>
+          清除当前历史
+        </n-button>
+      </div>
+    </n-modal>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, nextTick, onMounted } from 'vue'
-import { NIcon, NScrollbar, NAvatar, NTag, NSpin, NSpace, NButton, NInput, useMessage } from 'naive-ui'
+import { ref, reactive, nextTick, onMounted, computed } from 'vue'
+import { useStore } from 'vuex'
+import { NIcon, NScrollbar, NAvatar, NTag, NSpin, NSpace, NButton, NInput, useMessage, NModal, NList, NListItem, NEmpty } from 'naive-ui'
 import {
   IconMessageCircle,
   IconUser,
   IconChartBar,
   IconAward,
-  IconHelpCircle
+  IconHelpCircle,
+  IconHistory,
+  IconSearch,
+  IconTrash,
+  IconPlus
 } from '../../../utils/icons'
 import {
   chatWithAI,
@@ -180,20 +238,55 @@ interface ChatMessage {
 }
 
 // 响应式数据
-const msg_list = ref<ChatMessage[]>([])
+const store = useStore()
+const message = useMessage()
+
+// 映射 Vuex 状态
+const msg_list = computed(() => {
+  // 过滤逻辑：保留用户消息，以及内容不为空或正在加载中的 AI 消息
+  return store.state.aiChat.messages
+    .filter((msg: any) => {
+      if (msg.type === 'user') return true
+      return msg.loading || (msg.content && msg.content.trim() !== '')
+    })
+    .map((msg: any) => ({
+      role: msg.type === 'user' ? 'user' : 'assistant',
+      content: msg.content,
+      timestamp: msg.timestamp,
+      loading: msg.loading
+    }))
+})
+const session_id = computed(() => store.state.aiChat.sessionId)
+const is_loading = computed(() => store.state.aiChat.isSending)
+
 const input_msg = ref('')
-const is_loading = ref(false)
 const user_name = ref('学生')
 const msg_container = ref<HTMLElement>()
-const message = useMessage()
+
+// 历史记录查询弹窗
+const show_history = ref(false)
+const search_keyword = ref('')
+const filtered_history = computed(() => {
+  // 仅显示用户的问题
+  const userMessages = store.state.aiChat.messages.filter((msg: any) => msg.type === 'user')
+  if (!search_keyword.value.trim()) return userMessages
+  return userMessages.filter((msg: any) => 
+    msg.content.includes(search_keyword.value)
+  )
+})
 
 // 学生数据
 const student_id = ref<string>('')
-const session_id = ref<string>('')
+// 已整合到 computed session_id
 
 // 组件挂载时初始化
 onMounted(async () => {
+  // 加载本地存储的对话
+  await store.dispatch('aiChat/loadFromStorage')
   await initializeUser()
+  nextTick(() => {
+    scrollToBottom()
+  })
 })
 
 // 初始化用户信息
@@ -247,27 +340,22 @@ const sendMessage = async () => {
   if (!input_msg.value.trim() || is_loading.value) return
 
   const user_message = input_msg.value.trim()
-  addMessage('user', user_message)
   input_msg.value = ''
-  is_loading.value = true
 
   try {
-    const ai_response = await generateAIResponse(user_message)
-    addMessage('assistant', ai_response)
+    await store.dispatch('aiChat/sendMessage', {
+      message: user_message,
+      chatWithAI
+    })
+    nextTick(() => {
+      scrollToBottom()
+    })
   } catch (error: any) {
     console.error('发送消息失败:', error)
-    let errorMessage = '抱歉，AI助手服务暂时不可用，请稍后再试。'
-    if (error.response?.status === 404) {
-      errorMessage = '抱歉，AI聊天服务接口未找到。请联系管理员检查后端配置。'
-    } else if (error.response?.status === 500) {
-      errorMessage = '抱歉，服务器处理请求时出错。请稍后再试或联系管理员。'
-    } else if (error.message?.includes('Network Error')) {
-      errorMessage = '抱歉，网络连接失败。请检查网络连接后重试。'
-    }
-    addMessage('assistant', errorMessage)
+    const errorMessage = error.response?.status === 404 
+      ? '抱歉，AI聊天服务接口未找到。' 
+      : '抱歉，发送消息时出错，请重试。'
     message.error(errorMessage)
-  } finally {
-    is_loading.value = false
   }
 }
 
@@ -284,32 +372,17 @@ const handleEnterKey = (event: KeyboardEvent) => {
   }
 }
 
-// 生成AI响应
-const generateAIResponse = async (user_message: string): Promise<string> => {
-  if (!student_id.value) {
-    return '抱歉，无法获取您的身份信息，请刷新页面重试。'
-  }
+// 开启新对话
+const startNewChat = () => {
+  store.dispatch('aiChat/resetSession')
+  message.success('已开启新会话')
+}
 
-  // 后端 ChatRequest 需要 message 字段，session_id 可选
-  const response = await chatWithAI({
-    message: user_message,
-    session_id: session_id.value || undefined
-  }) as any
-
-  // 响应拦截器已解包，response 即为 {session_id, message, usage}
-  if (response?.session_id) {
-    session_id.value = response.session_id
-  }
-
-  if (typeof response === 'string') {
-    return response
-  }
-
-  if (response?.message) {
-    return response.message
-  }
-
-  return '抱歉，我暂时无法回答您的问题。'
+// 清除历史
+const clearHistory = () => {
+  store.dispatch('aiChat/clearStorage')
+  show_history.value = false
+  message.success('历史记录已清除')
 }
 
 // 格式化消息内容
@@ -331,6 +404,12 @@ const formatTime = (timestamp: Date): string => {
   if (minutes < 1440) return `${Math.floor(minutes / 60)}小时前`
   return timestamp.toLocaleDateString()
 }
+
+// 格式化历史记录日期 (年-月-日)
+const formatSimpleDate = (timestamp: Date): string => {
+  const d = new Date(timestamp)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 </script>
 
 <style scoped>
@@ -348,6 +427,9 @@ const formatTime = (timestamp: Date): string => {
   border-bottom: 1px solid #e8e8e8;
   padding: 16px 24px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .header-content {
@@ -447,7 +529,7 @@ const formatTime = (timestamp: Date): string => {
 
 .message-content {
   flex: 1;
-  max-width: 70%;
+  max-width: 85%;
 }
 
 .message-bubble {
@@ -456,11 +538,14 @@ const formatTime = (timestamp: Date): string => {
   padding: 12px 16px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   position: relative;
+  width: fit-content;
+  max-width: 100%;
 }
 
 .is-user .message-bubble {
   background: #409eff;
   color: white;
+  margin-left: auto;
 }
 
 .message-bubble.loading {
@@ -494,6 +579,44 @@ const formatTime = (timestamp: Date): string => {
 
 .is-user .message-time {
   color: rgba(255, 255, 255, 0.8);
+}
+
+/* 历史查询样式 */
+.history-search {
+  margin-bottom: 16px;
+}
+
+.history-list-wrapper {
+  margin: 16px 0;
+}
+
+.history-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.history-item-time {
+  font-size: 12px;
+  color: #909399;
+}
+
+.history-item-text {
+  font-size: 14px;
+  color: #606266;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.4;
+}
+
+.history-footer {
+  margin-top: 24px;
+  display: flex;
+  justify-content: flex-end;
 }
 
 /* 快捷操作 */

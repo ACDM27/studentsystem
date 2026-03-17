@@ -53,7 +53,7 @@
               {{ achievement.status === 'approved' ? '已认证' : (achievement.status === 'rejected' ? '未通过' : '审核中') }}
             </n-tag>
           </div>
-          <div class="card_title">{{ achievement.title || '未知标题' }}</div>
+          <div class="card_title">{{ achievement.content_json?.paper_title_cn || achievement.title || '未知标题' }}</div>
           <div class="card_info">
             <div class="info_item">
               <Medal :size="16" />
@@ -420,7 +420,8 @@ async function fetchAchievementData() {
           status: item.status || 'pending',
           awardedAt: item.date || item.awardedAt || item.awardDate || item.award_date || item.createdAt || new Date().toISOString(),
           date: item.date || item.awardedAt || item.awardDate || item.award_date || item.createdAt || new Date().toISOString(),
-          is_deleted: item.is_deleted === true ? true : false
+          is_deleted: item.is_deleted === true ? true : false,
+          content_json: item.content_json || item.contentJson || {}
         }
         
         console.log(`成果数据标准化:`, {
@@ -508,9 +509,21 @@ const filtered_achievements = computed((): AchievementItem[] => {
       return false
     }
     
-    // 关键词筛选
-    if (search_key.value && !achievement.title?.includes(search_key.value)) {
-      return false
+    // 关键词筛选（支持中文搜索英文论文）
+    if (search_key.value) {
+      const key = search_key.value
+      const cj = achievement.content_json || {}
+      const searchable = [
+        achievement.title,
+        cj.paper_title, cj.journal_name, cj.first_author,
+        cj.paper_title_cn, cj.journal_name_cn, cj.first_author_cn,
+        cj.issuing_organization_cn,
+        ...(cj.authors || []),
+        ...(cj.authors_cn || [])
+      ].filter(Boolean).join(' ')
+      if (!searchable.includes(key)) {
+        return false
+      }
     }
     
     // 年份筛选

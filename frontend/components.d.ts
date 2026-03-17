@@ -32,6 +32,7 @@ declare module 'vue' {
     LoginPage: typeof import('./src/components/student/login/LoginPage.vue')['default']
     PortraitAnalysis: typeof import('./src/components/student/portrait/portrait-analysis.vue')['default']
     PortraitChat: typeof import('./src/components/student/portrait/portrait-chat.vue')['default']
+    ProfilePage: typeof import('./src/components/student/profile/ProfilePage.vue')['default']
     Resume: typeof import('./src/components/student/resume/resume.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']

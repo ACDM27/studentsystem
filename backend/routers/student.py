@@ -105,6 +105,13 @@ async def ocr_recognize(
                     "doi": data.get("doi"),
                     "issn": data.get("issn"),
 
+                    # 英文论文中文映射字段
+                    "paper_title_cn": data.get("paper_title_cn"),
+                    "journal_name_cn": data.get("journal_name_cn"),
+                    "authors_cn": data.get("authors_cn"),
+                    "first_author_cn": data.get("first_author_cn"),
+                    "issuing_organization_cn": data.get("issuing_organization_cn"),
+
                     # 置信度评分
                     "recognition_confidence": data.get("recognition_confidence", {}),
 
@@ -172,10 +179,12 @@ async def create_achievement(
     """
     from services.file_manager import file_manager
     
-    # Validate teacher exists
-    teacher = db.query(SysTeacher).filter(SysTeacher.id == achievement.teacher_id).first()
-    if not teacher:
-        return error_response(msg="Teacher not found", code=404)
+    # Validate teacher exists (optional)
+    teacher = None
+    if achievement.teacher_id:
+        teacher = db.query(SysTeacher).filter(SysTeacher.id == achievement.teacher_id).first()
+        if not teacher:
+            return error_response(msg="Teacher not found", code=404)
 
     # Duplicate detection: same student + same title + same type
     existing = db.query(BizAchievement).filter(

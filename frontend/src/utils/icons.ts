@@ -75,7 +75,8 @@ import {
   IconRobot,
   IconDots as IconMore,
   IconList,
-  IconBrain
+  IconBrain,
+  IconHistory
 } from '@tabler/icons-vue'
 
 // 重新导出所有图标
@@ -146,5 +147,6 @@ export {
   IconRobot,
   IconMore,
   IconList,
-  IconBrain
+  IconBrain,
+  IconHistory
 }

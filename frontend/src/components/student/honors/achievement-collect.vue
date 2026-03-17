@@ -363,11 +363,21 @@
                 <n-input v-model:value="paper_data.paper_title" placeholder="请输入完整论文题目" clearable />
               </n-form-item>
             </n-grid-item>
+            <n-grid-item v-if="paper_data.paper_title_cn">
+              <n-form-item label="中文题目（AI翻译）">
+                <n-input v-model:value="paper_data.paper_title_cn" placeholder="英文论文自动翻译的中文题目" clearable />
+              </n-form-item>
+            </n-grid-item>
           </n-grid>
           <n-grid :cols="2" :x-gap="24" :y-gap="16">
             <n-grid-item>
               <n-form-item label="期刊 / 会议名称" path="journal_name">
                 <n-input v-model:value="paper_data.journal_name" placeholder="请输入期刊或会议全称" clearable />
+              </n-form-item>
+            </n-grid-item>
+            <n-grid-item v-if="paper_data.journal_name_cn">
+              <n-form-item label="中文期刊名（AI翻译）">
+                <n-input v-model:value="paper_data.journal_name_cn" placeholder="英文期刊自动翻译的中文名称" clearable />
               </n-form-item>
             </n-grid-item>
             <n-grid-item>
@@ -464,7 +474,7 @@
         <div class="form_section integrity_section">
           <n-form-item path="integrity_pledge" :show-label="false">
             <n-checkbox v-model:checked="paper_data.integrity_pledge">
-              <span class="integrity_text">本人承诺以上填写的论文信息真实有效，如有造假愿承担相应责任，包括成果积分清零并记入信用档案。</span>
+              <span class="integrity_text">本人承诺以上填写的论文信息真实有效，如有造假愿承担相应责任</span>
             </n-checkbox>
           </n-form-item>
         </div>
@@ -844,7 +854,13 @@ const paper_data = ref({
   tutor_name: '',
   evidence_url: '',
   attachments: [] as UploadFileInfo[],
-  integrity_pledge: false
+  integrity_pledge: false,
+  // 英文论文中文映射
+  paper_title_cn: '',
+  journal_name_cn: '',
+  authors_cn: [] as string[],
+  first_author_cn: '',
+  issuing_organization_cn: ''
 })
 
 const paper_rules = {
@@ -1058,7 +1074,9 @@ const reset_paper_form = () => {
     paper_title: '', journal_name: '', journal_level: '',
     publish_status: '', publish_date: null, author_order: '',
     doi: '', tutor_department: '', tutor_name: '', attachments: [],
-    integrity_pledge: false
+    integrity_pledge: false,
+    paper_title_cn: '', journal_name_cn: '', authors_cn: [],
+    first_author_cn: '', issuing_organization_cn: ''
   })
   message.success('表单已重置')
 }
@@ -1091,10 +1109,23 @@ const handle_paper_ocr = async ({ file, onFinish, onError }: any) => {
     if (raw.journal_name)  paper_data.value.journal_name  = raw.journal_name
     if (raw.journal_level) paper_data.value.journal_level = raw.journal_level
     if (raw.publish_status) paper_data.value.publish_status = publishStatusMap[raw.publish_status] || raw.publish_status
-    if (raw.author_order)  paper_data.value.author_order  = raw.author_order
+    if (raw.author_order) {
+      const valid_orders = ['第一作者', '通讯作者', '第二作者', '其他作者']
+      if (valid_orders.includes(raw.author_order)) {
+        paper_data.value.author_order = raw.author_order
+      } else {
+        paper_data.value.author_order = ''
+      }
+    }
     if (raw.doi)           paper_data.value.doi           = raw.doi
     if (raw.issn)          paper_data.value.issn          = raw.issn
     if (res.file_url)      paper_data.value.evidence_url  = res.file_url
+    // 英文论文中文映射
+    if (raw.paper_title_cn)   paper_data.value.paper_title_cn   = raw.paper_title_cn
+    if (raw.journal_name_cn)  paper_data.value.journal_name_cn  = raw.journal_name_cn
+    if (raw.authors_cn)       paper_data.value.authors_cn       = raw.authors_cn
+    if (raw.first_author_cn)  paper_data.value.first_author_cn  = raw.first_author_cn
+    if (raw.issuing_organization_cn) paper_data.value.issuing_organization_cn = raw.issuing_organization_cn
 
     if (raw.publish_date) {
       const d = new Date(raw.publish_date)
@@ -1240,7 +1271,7 @@ const submit_paper_form = async () => {
 
     await submitAchievement({
       teacher_id: teacherId,
-      title: paper_data.value.paper_title,
+      title: paper_data.value.paper_title_cn || paper_data.value.paper_title,
       type: 'paper',
       content_json: {
         paper_title: paper_data.value.paper_title,
@@ -1253,7 +1284,13 @@ const submit_paper_form = async () => {
         issn: paper_data.value.issn,
         tutor_department: paper_data.value.tutor_department,
         tutor_name: paper_data.value.tutor_name,
-        attachment_urls: uploaded_urls
+        attachment_urls: uploaded_urls,
+        // 英文论文中文映射（用于中文搜索）
+        ...(paper_data.value.paper_title_cn ? { paper_title_cn: paper_data.value.paper_title_cn } : {}),
+        ...(paper_data.value.journal_name_cn ? { journal_name_cn: paper_data.value.journal_name_cn } : {}),
+        ...(paper_data.value.authors_cn?.length ? { authors_cn: paper_data.value.authors_cn } : {}),
+        ...(paper_data.value.first_author_cn ? { first_author_cn: paper_data.value.first_author_cn } : {}),
+        ...(paper_data.value.issuing_organization_cn ? { issuing_organization_cn: paper_data.value.issuing_organization_cn } : {})
       },
       evidence_url: paper_data.value.evidence_url || uploaded_urls[0] || ''
     })
@@ -1734,6 +1771,12 @@ onMounted(() => {
       paper_data.value.author_order = ocrData.author_order || ''
       paper_data.value.doi = ocrData.doi || ''
       paper_data.value.evidence_url = ocrData.evidence_url || ''
+      // 英文论文中文映射
+      paper_data.value.paper_title_cn = ocrData.paper_title_cn || ''
+      paper_data.value.journal_name_cn = ocrData.journal_name_cn || ''
+      paper_data.value.authors_cn = ocrData.authors_cn || []
+      paper_data.value.first_author_cn = ocrData.first_author_cn || ''
+      paper_data.value.issuing_organization_cn = ocrData.issuing_organization_cn || ''
 
       if (ocrData.publish_date) {
         const d = new Date(ocrData.publish_date)

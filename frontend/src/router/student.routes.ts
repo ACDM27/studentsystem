@@ -42,16 +42,16 @@ export const studentRoutes: Array<RouteRecordRaw> = [
                 meta: { title: '个人画像' }
             },
             {
-                path: 'portrait/chat',
-                name: 'studentPortraitChat',
-                component: () => import('../components/student/portrait/portrait-chat.vue'),
-                meta: { title: '画像对话' }
-            },
-            {
                 path: 'portrait/ai-chat',
                 name: 'studentPortraitAiChat',
                 component: () => import('../components/student/portrait/ai-chat.vue'),
                 meta: { title: 'AI智能对话' }
+            },
+            {
+                path: 'profile',
+                name: 'studentProfile',
+                component: () => import('../components/student/profile/ProfilePage.vue'),
+                meta: { title: '个人资料' }
             }
         ]
     }

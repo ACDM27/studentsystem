@@ -153,10 +153,9 @@
         <!-- 右侧：表单编辑 -->
         <div class="right_panel">
           <div class="form_header">
-            <h3>核心字段核对</h3>
-            <p>请对照左侧原图，确保以下 7 项核心信息准确无误</p>
+            <h3>识别结果核对</h3>
           </div>
-          
+
           <n-form
             ref="verify_form_ref"
             :model="current_file.data"
@@ -164,68 +163,63 @@
             label-placement="top"
             size="medium"
           >
-             <!-- 第一行：学生与标题 -->
-             <n-grid :cols="2" :x-gap="12">
-               <n-grid-item>
-                 <n-form-item label="参赛学生">
-                   <!-- 🎨 UI/UX优化：使用动态标签显示所有学生 -->
-                   <div class="students-tags-container">
-                     <n-space v-if="current_file.data.team_members && current_file.data.team_members.length > 0">
-                       <n-tag 
-                         v-for="(student, index) in current_file.data.team_members" 
-                         :key="index"
-                         type="info"
-                         closable
-                         @close="removeStudent(index)"
-                       >
-                         {{ student }}
-                       </n-tag>
-                       <n-button text @click="showAddStudentDialog = true" size="small">
-                         <template #icon>
-                           <n-icon><IconPlus /></n-icon>
-                         </template>
-                         添加
-                       </n-button>
-                     </n-space>
-                     <n-button v-else text @click="showAddStudentDialog = true" size="small">
-                       <template #icon>
-                         <n-icon><IconPlus /></n-icon>
-                       </template>
-                       添加参赛学生
-                     </n-button>
-                   </div>
-                   <n-input 
-                     v-show="false"
-                     v-model:value="current_file.data.student_name"
-                   />
-                 </n-form-item>
-               </n-grid-item>
-               <n-grid-item>
-                  <n-form-item label="成果标题" path="title">
-                    <n-input 
-                      v-model:value="current_file.data.title" 
-                      placeholder="AI已根据证书内容智能生成，请核对并修改"
-                      type="textarea"
-                      :rows="3"
-                    />
-                    <div class="title-hint">
-                      <n-icon size="13"><IconInfoCircle /></n-icon>
-                      标题由AI根据证书类别、获奖人、成果名称等信息智能生成，请核对准确性
-                    </div>
-                  </n-form-item>
-               </n-grid-item>
-             </n-grid>
+            <!-- 成果标题：只读 + 编辑两态 -->
+            <n-form-item path="title">
+              <template #label>
+                <div class="field-label-row">
+                  <span>成果标题 <span class="required-mark">*</span></span>
+                  <n-button text size="tiny" @click="titleEditing = !titleEditing">
+                    {{ titleEditing ? '完成' : '编辑' }}
+                  </n-button>
+                </div>
+              </template>
+              <div v-if="!titleEditing" class="readonly-value title-readonly" @click="titleEditing = true">
+                {{ current_file.data.title || '—' }}
+              </div>
+              <n-input
+                v-else
+                v-model:value="current_file.data.title"
+                type="textarea"
+                :autosize="{ minRows: 2, maxRows: 5 }"
+              />
+            </n-form-item>
 
-             <!-- 第二行：日期与类别 -->
-             <n-grid :cols="2" :x-gap="12">
+            <!-- 参赛学生 -->
+            <n-form-item :label="studentFieldLabel">
+              <div class="students-tags-container">
+                <n-space v-if="current_file.data.team_members && current_file.data.team_members.length > 0" :size="6">
+                  <n-tag
+                    v-for="(student, index) in current_file.data.team_members"
+                    :key="index"
+                    type="info"
+                    closable
+                    @close="removeStudent(index)"
+                  >
+                    {{ student }}
+                  </n-tag>
+                  <n-button text @click="showAddStudentDialog = true" size="small">
+                    <template #icon><n-icon><IconPlus /></n-icon></template>
+                    添加
+                  </n-button>
+                </n-space>
+                <n-button v-else text @click="showAddStudentDialog = true" size="small">
+                  <template #icon><n-icon><IconPlus /></n-icon></template>
+                  添加{{ studentFieldLabel }}
+                </n-button>
+              </div>
+              <n-input v-show="false" v-model:value="current_file.data.student_name" />
+            </n-form-item>
+
+            <!-- 日期与类别 -->
+            <n-grid :cols="2" :x-gap="12">
               <n-grid-item>
                 <n-form-item label="获奖日期" path="date">
-                   <n-date-picker 
-                      v-model:value="current_file.data.date" 
-                      type="date"
-                      style="width: 100%"
-                      clearable
-                   />
+                  <n-date-picker
+                    v-model:value="current_file.data.date"
+                    type="date"
+                    style="width: 100%"
+                    clearable
+                  />
                 </n-form-item>
               </n-grid-item>
               <n-grid-item>
@@ -235,7 +229,7 @@
               </n-grid-item>
             </n-grid>
 
-            <!-- 第三行：奖项与等级 -->
+            <!-- 奖项与等级 -->
             <n-grid :cols="2" :x-gap="12">
               <n-grid-item>
                 <n-form-item label="具体奖项" path="award">
@@ -249,8 +243,8 @@
               </n-grid-item>
             </n-grid>
 
-            <!-- 🎨 第四行：指导教师（简化为单一多选字段） -->
-            <n-form-item label="指导教师" path="teacher_ids">
+            <!-- 指导教师（可选） -->
+            <n-form-item label="指导教师（可选）" path="teacher_ids">
               <n-select
                 v-model:value="current_file.data.teacher_ids"
                 :options="teacher_opts"
@@ -261,11 +255,6 @@
                 clearable
                 :max-tag-count="3"
               />
-              <!-- 显示OCR识别的教师名单（供参考） -->
-              <div v-if="current_file.data.advisors_text" class="ocr-hint">
-                <n-icon size="14" style="margin-right: 4px;"><IconInfoCircle /></n-icon>
-                证书识别：{{ current_file.data.advisors_text }}
-              </div>
             </n-form-item>
 
             <!-- 专利专属字段（当类别为专利时显示） -->
@@ -310,17 +299,33 @@
                 <n-grid :cols="2" :x-gap="12">
                   <n-grid-item>
                     <n-form-item label="论文/作品题目">
-                      <n-input 
-                        v-model:value="current_file.data.paper_title" 
+                      <n-input
+                        v-model:value="current_file.data.paper_title"
                         placeholder="如有论文，请填写完整题目"
                       />
                     </n-form-item>
                   </n-grid-item>
                   <n-grid-item>
                     <n-form-item label="期刊/会议名称">
-                      <n-input 
+                      <n-input
                         v-model:value="current_file.data.journal_name"
                         placeholder="如 SCI一区、EI、核心期刊等"
+                      />
+                    </n-form-item>
+                  </n-grid-item>
+                  <n-grid-item v-if="current_file.data.paper_title_cn" :span="2">
+                    <n-form-item label="中文题目（AI翻译）">
+                      <n-input
+                        v-model:value="current_file.data.paper_title_cn"
+                        placeholder="英文论文自动翻译的中文题目"
+                      />
+                    </n-form-item>
+                  </n-grid-item>
+                  <n-grid-item v-if="current_file.data.journal_name_cn">
+                    <n-form-item label="中文期刊名（AI翻译）">
+                      <n-input
+                        v-model:value="current_file.data.journal_name_cn"
+                        placeholder="英文期刊自动翻译的中文名称"
                       />
                     </n-form-item>
                   </n-grid-item>
@@ -428,6 +433,12 @@ interface FileItem {
     location?: string
     team_members?: string[]
     additional_info?: string
+    // 英文论文中文映射
+    paper_title_cn?: string
+    journal_name_cn?: string
+    authors_cn?: string[]
+    first_author_cn?: string
+    issuing_organization_cn?: string
     // 专利专属字段
     patent_number?: string     // 专利号/登记号
     patent_inventors?: string  // 发明人（顿号分隔）
@@ -474,6 +485,17 @@ const level_opts = [
 ]
 const teacher_opts = ref<{label: string, value: number}[]>([])
 
+// 成果标题编辑态
+const titleEditing = ref(false)
+
+// 根据成果类别动态显示学生字段标签
+const studentFieldLabel = computed(() => {
+  const cat = current_file.value?.data?.category
+  if (cat === 'patent') return '发明人 / 著作权人'
+  if (cat === 'certificate' || cat === 'certification') return '获奖学生'
+  return '参赛学生'
+})
+
 const form_rules = {
   title: { required: true, message: '标题不能为空', trigger: 'blur' },
   date: { required: true, message: '日期必选', trigger: 'change', type: 'number' },
@@ -494,7 +516,7 @@ const form_rules = {
       return true
     }
   },
-  teacher_id: { required: true, message: '必须关联指导教师', trigger: 'change', type: 'number' }
+  teacher_id: { required: false, trigger: 'change', type: 'number' }
 }
 
 // === 图片控制状态 ===
@@ -908,6 +930,28 @@ const process_ocr = async (item: FileItem) => {
         console.log('✅ issn:', item.data.issn)
       }
 
+      // ========== 英文论文中文映射字段 ==========
+      if (raw.paper_title_cn) {
+        item.data.paper_title_cn = raw.paper_title_cn
+        console.log('✅ paper_title_cn:', item.data.paper_title_cn)
+      }
+      if (raw.journal_name_cn) {
+        item.data.journal_name_cn = raw.journal_name_cn
+        console.log('✅ journal_name_cn:', item.data.journal_name_cn)
+      }
+      if (raw.authors_cn && Array.isArray(raw.authors_cn)) {
+        item.data.authors_cn = raw.authors_cn
+        console.log('✅ authors_cn:', item.data.authors_cn.join(', '))
+      }
+      if (raw.first_author_cn) {
+        item.data.first_author_cn = raw.first_author_cn
+        console.log('✅ first_author_cn:', item.data.first_author_cn)
+      }
+      if (raw.issuing_organization_cn) {
+        item.data.issuing_organization_cn = raw.issuing_organization_cn
+        console.log('✅ issuing_organization_cn:', item.data.issuing_organization_cn)
+      }
+
       // ========== 专利专属字段 ==========
       if (item.data.category === 'patent') {
         // 专利号
@@ -945,7 +989,13 @@ const process_ocr = async (item: FileItem) => {
           author_order: raw.author_order || '',
           doi: raw.doi || '',
           issn: raw.issn || '',
-          student_name: item.data.student_name || ''
+          student_name: item.data.student_name || '',
+          // 英文论文中文映射
+          paper_title_cn: raw.paper_title_cn || '',
+          journal_name_cn: raw.journal_name_cn || '',
+          authors_cn: raw.authors_cn || [],
+          first_author_cn: raw.first_author_cn || '',
+          issuing_organization_cn: raw.issuing_organization_cn || ''
         }
         localStorage.setItem('ocr_paper_data', JSON.stringify(paper_ocr_data))
         router.push('/student/achievement-collect')
@@ -1019,6 +1069,7 @@ const open_verify_modal = (item: FileItem) => {
   }
   
   current_file.value = item
+  titleEditing.value = false
   show_verify_modal.value = true
   
   // 图片自适应逻辑：直接使用item已计算好的旋转角度，或者默认值
@@ -1070,14 +1121,10 @@ const handle_m_down = (e: MouseEvent) => {
 
 // 5. 提交逻辑
 const submit_single = async (item: FileItem) => {
-  // 🔥 提交前验证和准备
-  if (!item.data.teacher_ids || item.data.teacher_ids.length === 0) {
-    message.warning('请至少选择一位指导教师')
-    return
+  // 🔥 从teacher_ids数组中取第一个作为主要教师ID（指导教师可选）
+  if (item.data.teacher_ids && item.data.teacher_ids.length > 0) {
+    item.data.teacher_id = item.data.teacher_ids[0]
   }
-  
-  // 🔥 从teacher_ids数组中取第一个作为主要教师ID
-  item.data.teacher_id = item.data.teacher_ids[0]
   
   verify_form_ref.value?.validate(async (errors: any) => {
     if (!errors) {
@@ -1094,7 +1141,7 @@ const submit_single = async (item: FileItem) => {
           title: item.data.title,
           type: item.data.category as any,
           evidence_url: item.data.evidence_url,
-          teacher_id: item.data.teacher_id!,
+          teacher_id: item.data.teacher_id || undefined,
           content_json: {
             award: item.data.award,
             level: item.data.level,
@@ -1479,6 +1526,40 @@ onMounted(async () => {
   font-size: 12px;
 }
 
+/* 标题字段：标签行（标签 + 编辑按钮） */
+.field-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+.required-mark {
+  color: #e03050;
+  margin-left: 2px;
+}
+
+/* 只读展示值 */
+.readonly-value {
+  padding: 8px 12px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  color: #1f2937;
+  font-size: 14px;
+  line-height: 1.6;
+  width: 100%;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+.readonly-value:hover {
+  border-color: #1890ff;
+}
+.title-readonly {
+  font-weight: 500;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
 /* 表单内容区域 - 可滚动 */
 .right_panel :deep(.n-form) {
   flex: 1; /* 🔑 占据剩余空间 */
@@ -1515,28 +1596,6 @@ onMounted(async () => {
   border-color: #40a9ff;
 }
 
-/* OCR识别提示样式 */
-.ocr-hint {
-  margin-top: 4px;
-  font-size: 12px;
-  color: #999;
-  display: flex;
-  align-items: center;
-}
-
-/* 智能生成标题提示 */
-.title-hint {
-  margin-top: 6px;
-  font-size: 12px;
-  color: #1677ff;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  background: #f0f7ff;
-  padding: 4px 8px;
-  border-radius: 4px;
-  border-left: 3px solid #1677ff;
-}
 
 /* 学术补充信息折叠面板 */
 .extra-fields-collapse {

@@ -6,7 +6,7 @@
         v-if="!isExpanded"
         class="collapse-btn"
         @click="toggleExpand"
-        :title="'AI学习助手'"
+        :title="'AI助手'"
       >
         <n-icon size="28" class="assistant-icon">
           <IconMessageCircle />
@@ -25,21 +25,11 @@
               <IconMessageCircle />
             </n-icon>
             <div class="header-info">
-              <h3 class="header-title">AI学习助手</h3>
+              <h3 class="header-title">AI助手</h3>
               <p class="header-status">{{ connectionStatus }}</p>
             </div>
           </div>
           <div class="header-actions">
-            <n-button
-              size="small"
-              text
-              @click="navigateToFullChat"
-              title="查看完整对话"
-            >
-              <template #icon>
-                <n-icon><IconExternalLink /></n-icon>
-              </template>
-            </n-button>
             <n-button
               size="small"
               text
@@ -60,7 +50,7 @@
             <n-icon size="40" class="welcome-icon">
               <IconMessageCircle />
             </n-icon>
-            <p class="welcome-text">您好！我是AI学习助手</p>
+            <p class="welcome-text">您好！我是AI助手</p>
             <p class="welcome-hint">我可以帮您分析学习成果、提供建议</p>
           </div>
 
@@ -72,8 +62,15 @@
             :class="`message-${msg.type}`"
           >
             <div class="message-avatar">
-              <n-avatar v-if="msg.type === 'user'" size="small" class="user-avatar">
-                {{ userName.charAt(0) }}
+              <n-avatar 
+                v-if="msg.type === 'user'" 
+                size="small" 
+                :src="userAvatarUrl" 
+                class="user-avatar"
+              >
+                <template #fallback>
+                  {{ userName.charAt(0) }}
+                </template>
               </n-avatar>
               <n-icon v-else size="20" class="ai-avatar">
                 <IconMessageCircle />
@@ -88,19 +85,23 @@
             </div>
           </div>
 
-          <!-- 历史消息提示 -->
-          <div v-if="messageCount > 5" class="more-messages-hint">
-            <n-button text size="tiny" @click="navigateToFullChat">
-              <template #icon>
-                <n-icon><IconExternalLink /></n-icon>
-              </template>
-              查看完整对话历史（{{ messageCount }} 条消息）
-            </n-button>
-          </div>
         </div>
 
         <!-- 输入区域 -->
         <div class="input-area">
+          <n-button
+            secondary
+            circle
+            size="small"
+            type="primary"
+            @click="resetTopic"
+            title="开启新话题"
+            class="reset-btn"
+          >
+            <template #icon>
+              <n-icon>🆕</n-icon>
+            </template>
+          </n-button>
           <n-input
             v-model:value="inputMessage"
             type="textarea"
@@ -122,31 +123,6 @@
             </template>
           </n-button>
         </div>
-
-        <!-- 快捷操作 -->
-        <div class="quick-actions">
-          <n-button
-            size="tiny"
-            text
-            @click="sendQuickQuestion('请分析我的学习成果')"
-          >
-            📊 学习成果
-          </n-button>
-          <n-button
-            size="tiny"
-            text
-            @click="sendQuickQuestion('为我推荐学习内容')"
-          >
-            💡 学习推荐
-          </n-button>
-          <n-button
-            size="tiny"
-            text
-            @click="sendQuickQuestion('分析我的学情预警')"
-          >
-            ⚠️ 学情预警
-          </n-button>
-        </div>
       </div>
     </Transition>
   </div>
@@ -163,7 +139,7 @@ import {
   IconSend,
   IconExternalLink
 } from '@/utils/icons'
-import { chatWithAI, getStudentMe } from '@/api'
+import { chatWithAI, getStudentMe, getStudentProfile } from '@/api'
 
 // Router & Store
 const router = useRouter()
@@ -178,10 +154,23 @@ const messagesContainer = ref<HTMLElement>()
 const isExpanded = computed(() => store.state.aiChat.isExpanded)
 const isSending = computed(() => store.state.aiChat.isSending)
 const userName = computed(() => store.state.aiChat.userName)
+const userAvatar = computed(() => store.state.aiChat.userAvatar)
 const sessionId = computed(() => store.state.aiChat.sessionId)
 const displayMessages = computed(() => store.getters['aiChat/displayMessages'])
 const connectionStatus = computed(() => store.getters['aiChat/connectionStatus'])
 const messageCount = computed(() => store.getters['aiChat/messageCount'])
+
+// 默认人员头像
+const default_avatar = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23e0e0e0"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>'
+
+const userAvatarUrl = computed(() => {
+  if (!userAvatar.value) return default_avatar
+  if (userAvatar.value.startsWith('/uploads/')) {
+    const token = localStorage.getItem('token')
+    return userAvatar.value + (token ? `?token=${token}` : '')
+  }
+  return userAvatar.value
+})
 
 // Methods
 const toggleExpand = () => {
@@ -191,9 +180,11 @@ const toggleExpand = () => {
   })
 }
 
-const sendQuickQuestion = (question: string) => {
-  inputMessage.value = question
-  sendMessage()
+const resetTopic = () => {
+  store.commit('aiChat/RESET_SESSION')
+  store.commit('aiChat/CLEAR_MESSAGES')
+  store.dispatch('aiChat/saveToStorage')
+  message.success('已开启新话题')
 }
 
 const sendMessage = async () => {
@@ -224,16 +215,6 @@ const handleEnterKey = (event: KeyboardEvent) => {
   }
 }
 
-const navigateToFullChat = () => {
-  // 跳转到完整的对话页面
-  router.push({
-    name: 'studentPortraitChat',
-    query: {
-      session_id: sessionId.value || undefined
-    }
-  })
-}
-
 const scrollToBottom = async () => {
   await nextTick()
   const el = messagesContainer.value
@@ -255,12 +236,22 @@ onMounted(async () => {
   // 从Store加载状态
   await store.dispatch('aiChat/loadFromStorage')
   
-  // 获取用户信息
+  // 获取用户信息并同步到 Store
   try {
     const userInfo = await getStudentMe()
     store.commit('aiChat/SET_USER_NAME', userInfo.name || userInfo.username || '同学')
+    
+    // 如果没有头像，尝试从详细档案补全
+    if (userInfo.avatar_url) {
+      store.commit('aiChat/SET_USER_AVATAR', userInfo.avatar_url)
+    } else {
+      const profile = await getStudentProfile()
+      if (profile?.basic_info?.avatar_url) {
+        store.commit('aiChat/SET_USER_AVATAR', profile.basic_info.avatar_url)
+      }
+    }
   } catch (err) {
-    console.warn('获取用户信息失败:', err)
+    console.warn('获取用户信息同步到AI助手失败:', err)
   }
   
   console.log('[FloatingAiAssistant] Initialization complete')
@@ -280,12 +271,12 @@ onMounted(async () => {
 .collapse-btn {
   position: relative;
   right: 0;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #1a3a8a 0%, #0d2b6b 100%);
   color: white;
   padding: 16px 12px;
   border-radius: 12px 0 0 12px;
   cursor: pointer;
-  box-shadow: -2px 4px 12px rgba(102, 126, 234, 0.3);
+  box-shadow: -2px 4px 12px rgba(13, 43, 107, 0.3);
   transition: all 0.3s ease;
   display: flex;
   flex-direction: column;
@@ -295,8 +286,8 @@ onMounted(async () => {
 }
 
 .collapse-btn:hover {
-  background: linear-gradient(135deg, #7289ea 0%, #8659b5 100%);
-  box-shadow: -4px 6px 16px rgba(102, 126, 234, 0.4);
+  background: linear-gradient(135deg, #234db0 0%, #153580 100%);
+  box-shadow: -4px 6px 16px rgba(13, 43, 107, 0.4);
   transform: translateX(-4px);
 }
 
@@ -337,7 +328,7 @@ onMounted(async () => {
 
 /* 头部 */
 .panel-header {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #1a3a8a 0%, #0d2b6b 100%);
   color: white;
   padding: 16px;
   display: flex;
@@ -442,7 +433,7 @@ onMounted(async () => {
 }
 
 .user-avatar {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #1a3a8a 0%, #0d2b6b 100%);
   color: white;
 }
 
@@ -462,9 +453,10 @@ onMounted(async () => {
 }
 
 .message-user .message-bubble {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  background: #e7f3ff;
+  color: #1a1a1a;
   border-radius: 12px 12px 0 12px;
+  border: 1px solid #d0e7ff;
 }
 
 .message-ai .message-bubble {
@@ -509,18 +501,9 @@ onMounted(async () => {
   flex-shrink: 0;
 }
 
-/* 快捷操作 */
-.quick-actions {
-  padding: 8px 16px 12px;
-  background: white;
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  border-top: 1px solid #f0f0f0;
-}
-
-.quick-actions :deep(.n-button) {
-  font-size: 12px;
+.reset-btn {
+  flex-shrink: 0;
+  margin-bottom: 4px; /* 对齐文本域底部 */
 }
 
 /* 过渡动画 */

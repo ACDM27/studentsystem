@@ -19,6 +19,7 @@ export interface AiChatState {
     isExpanded: boolean
     isSending: boolean
     userName: string
+    userAvatar: string
 }
 
 const STORAGE_KEY_SESSION = 'ai_chat_session_id'
@@ -33,7 +34,8 @@ const aiChatModule: Module<AiChatState, any> = {
         messages: [],
         isExpanded: false,
         isSending: false,
-        userName: '同学'
+        userName: '同学',
+        userAvatar: ''
     }),
 
     getters: {
@@ -113,6 +115,18 @@ const aiChatModule: Module<AiChatState, any> = {
         SET_USER_NAME(state, userName: string) {
             console.log('[AI Chat Store] SET_USER_NAME:', userName)
             state.userName = userName
+        },
+
+        // 设置用户头像
+        SET_USER_AVATAR(state, userAvatar: string) {
+            console.log('[AI Chat Store] SET_USER_AVATAR:', userAvatar)
+            state.userAvatar = userAvatar
+        },
+
+        // 仅重置SessionID而不清空消息（开启新话题）
+        RESET_SESSION(state) {
+            console.log('[AI Chat Store] RESET_SESSION (Starting new topic)')
+            state.sessionId = null
         }
     },
 
@@ -139,11 +153,7 @@ const aiChatModule: Module<AiChatState, any> = {
                     commit('SET_MESSAGES', messages)
                 }
 
-                // 加载展开状态（可选）
-                const savedExpanded = localStorage.getItem(STORAGE_KEY_EXPANDED)
-                if (savedExpanded === 'true') {
-                    commit('SET_EXPANDED', true)
-                }
+                /* 移除自动恢复展开状态的逻辑 */
 
                 console.log('[AI Chat Store] Loaded state:', {
                     sessionId: state.sessionId,
@@ -173,8 +183,7 @@ const aiChatModule: Module<AiChatState, any> = {
                     }))
                 localStorage.setItem(STORAGE_KEY_MESSAGES, JSON.stringify(messagesToSave))
 
-                // 保存展开状态
-                localStorage.setItem(STORAGE_KEY_EXPANDED, String(state.isExpanded))
+                /* 移除自动保存展开状态的逻辑 */
 
                 console.log('[AI Chat Store] Saved:', {
                     sessionId: state.sessionId,
@@ -185,9 +194,9 @@ const aiChatModule: Module<AiChatState, any> = {
             }
         },
 
-        // 清除存储
+        // 清除所有历史存储信息
         clearStorage({ commit }) {
-            console.log('[AI Chat Store] Clearing storage...')
+            console.log('[AI Chat Store] Clearing all storage...')
 
             try {
                 localStorage.removeItem(STORAGE_KEY_SESSION)
@@ -198,10 +207,18 @@ const aiChatModule: Module<AiChatState, any> = {
                 commit('CLEAR_MESSAGES')
                 commit('SET_EXPANDED', false)
 
-                console.log('[AI Chat Store] Storage cleared')
+                console.log('[AI Chat Store] All storage cleared')
             } catch (error) {
                 console.error('[AI Chat Store] 清除存储失败:', error)
             }
+        },
+
+        // 开启新对话（仅清空当前界面和Session，保留LocalStorage中的历史记录）
+        resetSession({ commit }) {
+            console.log('[AI Chat Store] Resetting session for new chat...')
+            commit('RESET_SESSION')
+            commit('CLEAR_MESSAGES')
+            // 不调用 localStorage.removeItem
         },
 
         // 发送消息

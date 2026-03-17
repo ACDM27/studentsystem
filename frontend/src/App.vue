@@ -25,8 +25,7 @@ html, body {
 
 /* 针对首页和登录页面隐藏滚动条 */
 body:has(.home-container),
-body:has(.login-page),
-body:has(.admin-login-container) {
+body:has(.login-page) {
   overflow: hidden !important;
   height: 100vh !important;
 }
