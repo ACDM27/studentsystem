@@ -24,6 +24,10 @@
         "src/*"
       ]
     },
+    "types": [
+      "vite/client",
+      "node"
+    ],
     "lib": [
       "esnext",
       "dom",

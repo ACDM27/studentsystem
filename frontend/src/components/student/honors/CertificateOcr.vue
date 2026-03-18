@@ -174,7 +174,11 @@
                 </div>
               </template>
               <div v-if="!titleEditing" class="readonly-value title-readonly" @click="titleEditing = true">
-                {{ current_file.data.title || '—' }}
+                {{ current_file.data.paper_title_cn || current_file.data.title || '—' }}
+                <div v-if="current_file.data.paper_title_cn && current_file.data.title !== current_file.data.paper_title_cn" 
+                     class="original-text">
+                  原文：{{ current_file.data.title }}
+                </div>
               </div>
               <n-input
                 v-else
@@ -232,8 +236,8 @@
             <!-- 奖项与等级 -->
             <n-grid :cols="2" :x-gap="12">
               <n-grid-item>
-                <n-form-item label="具体奖项" path="award">
-                  <n-input v-model:value="current_file.data.award" placeholder="如：一等奖" />
+                <n-form-item :label="getFieldLabel('award')" path="award">
+                  <n-input v-model:value="current_file.data.award" :placeholder="getFieldPlaceholder('award')" />
                 </n-form-item>
               </n-grid-item>
               <n-grid-item>
@@ -293,42 +297,133 @@
               </n-grid>
             </template>
 
-            <!-- 扩展信息：论文/科研/项目相关补充字段 -->
-            <n-collapse class="extra-fields-collapse">
-              <n-collapse-item title="📋 学术补充信息（论文/科研/项目类必填）" name="extra">
+            <!-- 论文专属字段（当类别为论文时显示） -->
+            <template v-if="current_file?.data?.category === 'paper'">
+              <n-divider style="margin: 12px 0 8px">论文详细信息</n-divider>
+              <n-grid :cols="2" :x-gap="12">
+                <n-grid-item>
+                  <n-form-item label="论文题目（中文）" path="paper_title_cn">
+                    <n-input
+                      v-model:value="current_file.data.paper_title_cn"
+                      placeholder="AI翻译的中文题目"
+                      clearable
+                    />
+                  </n-form-item>
+                </n-grid-item>
+                <n-grid-item>
+                  <n-form-item label="期刊名称（中文）" path="journal_name_cn">
+                    <n-input
+                      v-model:value="current_file.data.journal_name_cn"
+                      placeholder="AI翻译的中文期刊名"
+                      clearable
+                    />
+                  </n-form-item>
+                </n-grid-item>
+              </n-grid>
+              <n-grid :cols="2" :x-gap="12">
+                <n-grid-item>
+                  <n-form-item label="论文题目（英文）">
+                    <n-input
+                      v-model:value="current_file.data.paper_title"
+                      placeholder="英文原题目"
+                      readonly
+                      class="readonly-field"
+                    />
+                  </n-form-item>
+                </n-grid-item>
+                <n-grid-item>
+                  <n-form-item label="期刊名称（英文）">
+                    <n-input
+                      v-model:value="current_file.data.journal_name"
+                      placeholder="英文期刊名"
+                      readonly
+                      class="readonly-field"
+                    />
+                  </n-form-item>
+                </n-grid-item>
+              </n-grid>
+              <n-grid :cols="2" :x-gap="12">
+                <n-grid-item>
+                  <n-form-item label="DOI">
+                    <n-input
+                      v-model:value="current_file.data.doi"
+                      placeholder="如：10.1000/182"
+                      clearable
+                    />
+                  </n-form-item>
+                </n-grid-item>
+                <n-grid-item>
+                  <n-form-item label="ISSN">
+                    <n-input
+                      v-model:value="current_file.data.issn"
+                      placeholder="期刊ISSN号"
+                      clearable
+                    />
+                  </n-form-item>
+                </n-grid-item>
+              </n-grid>
+              <n-grid :cols="2" :x-gap="12">
+                <n-grid-item>
+                  <n-form-item label="作者顺序">
+                    <n-input
+                      v-model:value="current_file.data.author_order"
+                      placeholder="如：第一作者、通讯作者"
+                      clearable
+                    />
+                  </n-form-item>
+                </n-grid-item>
+                <n-grid-item>
+                  <n-form-item label="发表状态">
+                    <n-select
+                      v-model:value="current_file.data.publish_status"
+                      :options="publishStatusOpts"
+                      placeholder="选择发表状态"
+                      clearable
+                    />
+                  </n-form-item>
+                </n-grid-item>
+              </n-grid>
+            </template>
+
+            <!-- 扩展信息：科研/项目相关补充字段（论文类别已有专属区域，此处不重复） -->
+            <n-collapse class="extra-fields-collapse" :default-expanded-names="current_file?.data?.category === 'research' || current_file?.data?.category === 'project' ? ['extra'] : []">
+              <n-collapse-item title="📋 学术补充信息（科研/项目类补充字段）" name="extra">
                 <n-grid :cols="2" :x-gap="12">
-                  <n-grid-item>
-                    <n-form-item label="论文/作品题目">
-                      <n-input
-                        v-model:value="current_file.data.paper_title"
-                        placeholder="如有论文，请填写完整题目"
-                      />
-                    </n-form-item>
-                  </n-grid-item>
-                  <n-grid-item>
-                    <n-form-item label="期刊/会议名称">
-                      <n-input
-                        v-model:value="current_file.data.journal_name"
-                        placeholder="如 SCI一区、EI、核心期刊等"
-                      />
-                    </n-form-item>
-                  </n-grid-item>
-                  <n-grid-item v-if="current_file.data.paper_title_cn" :span="2">
-                    <n-form-item label="中文题目（AI翻译）">
-                      <n-input
-                        v-model:value="current_file.data.paper_title_cn"
-                        placeholder="英文论文自动翻译的中文题目"
-                      />
-                    </n-form-item>
-                  </n-grid-item>
-                  <n-grid-item v-if="current_file.data.journal_name_cn">
-                    <n-form-item label="中文期刊名（AI翻译）">
-                      <n-input
-                        v-model:value="current_file.data.journal_name_cn"
-                        placeholder="英文期刊自动翻译的中文名称"
-                      />
-                    </n-form-item>
-                  </n-grid-item>
+                  <!-- 只在非论文类别时显示论文字段 -->
+                  <template v-if="current_file?.data?.category !== 'paper'">
+                    <n-grid-item>
+                      <n-form-item label="论文/作品题目">
+                        <n-input
+                          v-model:value="current_file.data.paper_title"
+                          placeholder="如有论文，请填写完整题目"
+                        />
+                      </n-form-item>
+                    </n-grid-item>
+                    <n-grid-item>
+                      <n-form-item label="期刊/会议名称">
+                        <n-input
+                          v-model:value="current_file.data.journal_name"
+                          placeholder="如 SCI一区、EI、核心期刊等"
+                        />
+                      </n-form-item>
+                    </n-grid-item>
+                    <n-grid-item v-if="current_file.data.paper_title_cn" :span="2">
+                      <n-form-item label="中文题目（AI翻译）">
+                        <n-input
+                          v-model:value="current_file.data.paper_title_cn"
+                          placeholder="英文论文自动翻译的中文题目"
+                        />
+                      </n-form-item>
+                    </n-grid-item>
+                    <n-grid-item v-if="current_file.data.journal_name_cn">
+                      <n-form-item label="中文期刊名（AI翻译）">
+                        <n-input
+                          v-model:value="current_file.data.journal_name_cn"
+                          placeholder="英文期刊自动翻译的中文名称"
+                        />
+                      </n-form-item>
+                    </n-grid-item>
+                  </template>
                   <n-grid-item>
                     <n-form-item label="项目名称">
                       <n-input 
@@ -360,10 +455,10 @@
                 block
                 secondary
                 size="medium"
-                :loading="current_file.status === 'processing'"
+                :loading="current_file?.status === 'processing'"
                 @click="rerun_ocr(current_file)"
               >
-                🔄 切换类型重新识别（当前：{{ category_opts.find(o => o.value === current_file.data.category)?.label || '自动' }}）
+                🔄 切换类型重新识别（当前：{{ category_opts.find(o => o.value === current_file?.data?.category)?.label || '自动' }}）
               </n-button>
               <n-button block type="primary" size="large" @click="submit_single(current_file)" :loading="submitting">
                 确认无误，提交审核
@@ -466,6 +561,7 @@ const cert_type_select_opts = [
   { label: '专利 / 软件著作权', value: 'patent' },
   { label: '科研成果', value: 'research' },
   { label: '项目类', value: 'project' },
+  { label: '论文类', value: 'paper' },
   { label: '荣誉证书', value: 'certificate' },
 ]
 
@@ -493,31 +589,85 @@ const studentFieldLabel = computed(() => {
   const cat = current_file.value?.data?.category
   if (cat === 'patent') return '发明人 / 著作权人'
   if (cat === 'certificate' || cat === 'certification') return '获奖学生'
+  if (cat === 'paper') return '作者'
   return '参赛学生'
 })
 
-const form_rules = {
-  title: { required: true, message: '标题不能为空', trigger: 'blur' },
-  date: { required: true, message: '日期必选', trigger: 'change', type: 'number' },
-  category: { required: true, message: '类别必选', trigger: 'change' },
-  level: {
-    required: true, trigger: 'change',
-    validator: (_rule: any, value: string) => {
-      if (current_file.value?.data?.category === 'patent') return true
-      if (!value) return new Error('等级必选')
-      return true
-    }
-  },
-  award: {
-    required: true, trigger: 'blur',
-    validator: (_rule: any, value: string) => {
-      if (current_file.value?.data?.category === 'patent') return true
-      if (!value) return new Error('奖项必填')
-      return true
-    }
-  },
-  teacher_id: { required: false, trigger: 'change', type: 'number' }
+// 动态字段标签函数
+const getFieldLabel = (field: string) => {
+  const category = current_file.value?.data?.category
+  switch (field) {
+    case 'award':
+      if (category === 'paper') return '期刊级别'
+      if (category === 'patent') return '专利类型'
+      return '具体奖项'
+    default:
+      return field
+  }
 }
+
+const getFieldPlaceholder = (field: string) => {
+  const category = current_file.value?.data?.category
+  switch (field) {
+    case 'award':
+      if (category === 'paper') return '如：SCI一区、EI、核心期刊'
+      if (category === 'patent') return '如：发明专利、实用新型'
+      return '如：一等奖'
+    default:
+      return ''
+  }
+}
+
+// 发表状态选项
+const publishStatusOpts = [
+  { label: '已发表', value: 'published' },
+  { label: '已接收', value: 'accepted' },
+  { label: '审稿中', value: 'under_review' },
+  { label: '已投稿', value: 'submitted' }
+]
+
+// 动态表单验证规则
+const form_rules = computed(() => {
+  const category = current_file.value?.data?.category
+  
+  const baseRules = {
+    title: { required: true, message: '标题不能为空', trigger: 'blur' },
+    date: { required: true, message: '日期必选', trigger: 'change', type: 'number' },
+    category: { required: true, message: '类别必选', trigger: 'change' },
+  }
+  
+  // 根据类别添加特定规则
+  if (category === 'paper') {
+    return {
+      ...baseRules,
+      paper_title_cn: { required: true, message: '中文题目必填', trigger: 'blur' },
+      journal_name_cn: { required: true, message: '中文期刊名必填', trigger: 'blur' },
+      author_order: { required: true, message: '作者顺序必填', trigger: 'blur' },
+      teacher_id: { required: false, trigger: 'change', type: 'number' }
+    }
+  } else if (category === 'patent') {
+    return {
+      ...baseRules,
+      patent_number: { required: true, message: '专利号必填', trigger: 'blur' },
+      patent_inventors: { required: true, message: '发明人必填', trigger: 'blur' },
+      teacher_id: { required: false, trigger: 'change', type: 'number' }
+    }
+  } else {
+    // 竞赛类等其他类别
+    return {
+      ...baseRules,
+      level: {
+        required: true, trigger: 'change',
+        validator: (_rule: any, value: string) => {
+          if (!value) return new Error('等级必选')
+          return true
+        }
+      },
+      award: { required: true, message: '奖项必填', trigger: 'blur' },
+      teacher_id: { required: false, trigger: 'change', type: 'number' }
+    }
+  }
+})
 
 // === 图片控制状态 ===
 const img_state = reactive({
@@ -566,6 +716,7 @@ const handle_batch_upload = async ({ file, onFinish }: UploadCustomRequestOption
               : default_cert_type.value === 'research' ? 'research'
               : default_cert_type.value === 'project' ? 'project'
               : default_cert_type.value === 'certificate' ? 'certificate'
+              : default_cert_type.value === 'paper' ? 'paper'
               : 'competition',
       level: 'university',
       award: '',
@@ -973,37 +1124,15 @@ const process_ocr = async (item: FileItem) => {
 
       console.log('📊 字段填充完成，最终数据:', item.data)
 
-      // ========== 路由分发：论文类跳转至论文表单 ==========
-      if (raw.document_type === 'paper') {
-        console.log('📄 检测到论文文档，跳转至论文成果填写表单')
-        const paper_ocr_data = {
-          evidence_url: item.data.evidence_url,
-          title: item.data.title || '',
-          paper_title: raw.paper_title || '',
-          journal_name: raw.journal_name || '',
-          journal_level: raw.journal_level || '',
-          publish_status: raw.publish_status || '',
-          publish_date: raw.publish_date || '',
-          authors: raw.authors || [],
-          first_author: raw.first_author || '',
-          author_order: raw.author_order || '',
-          doi: raw.doi || '',
-          issn: raw.issn || '',
-          student_name: item.data.student_name || '',
-          // 英文论文中文映射
-          paper_title_cn: raw.paper_title_cn || '',
-          journal_name_cn: raw.journal_name_cn || '',
-          authors_cn: raw.authors_cn || [],
-          first_author_cn: raw.first_author_cn || '',
-          issuing_organization_cn: raw.issuing_organization_cn || ''
-        }
-        localStorage.setItem('ocr_paper_data', JSON.stringify(paper_ocr_data))
-        router.push('/student/achievement-collect')
-        return
+      // ========== 确保论文前端展示正确分类 ==========
+      if (raw.document_type === 'paper' || raw.suggested_type === 'paper') {
+        console.log('📄 检测到论文文档，自动切换类别为 paper')
+        item.data.category = 'paper'
       }
 
-      // 证书类：自动打开核对窗口
+      // 所有类型：统一自动打开核对窗口
       open_verify_modal(item)
+      
       
     } else {
       // 完全无法识别结构化数据
@@ -1159,7 +1288,23 @@ const submit_single = async (item: FileItem) => {
             certificate_number: item.data.certificate_number,
             project_name: item.data.project_name,
             team_members: item.data.team_members,
-            additional_info: item.data.additional_info
+            additional_info: item.data.additional_info,
+            // 论文专属补充字段
+            paper_title: item.data.paper_title,
+            journal_name: item.data.journal_name,
+            journal_level: item.data.journal_level,
+            publish_status: item.data.publish_status,
+            author_order: item.data.author_order,
+            doi: item.data.doi,
+            authors: item.data.authors,
+            first_author: item.data.first_author,
+            publish_date: item.data.publish_date,
+            issn: item.data.issn,
+            // 🔥 注入所有翻译字段（以 _cn 结尾）
+            ...(Object.keys(item.data).reduce((acc: any, key: string) => {
+              if (key.endsWith('_cn')) acc[key] = (item.data as any)[key]
+              return acc
+            }, {}))
           }
         })
         message.success('提交成功！')
@@ -1213,6 +1358,34 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+/* 原文显示样式 */
+.original-text {
+  font-size: 12px;
+  color: #666;
+  margin-top: 4px;
+  font-style: italic;
+}
+
+/* 论文专属区域样式 */
+.paper-specific-section {
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+}
+
+/* 只读字段样式 */
+.readonly-field {
+  background: #f5f5f5 !important;
+  color: #666 !important;
+}
+
+.readonly-field :deep(.n-input__input-el) {
+  background: #f5f5f5 !important;
+  color: #666 !important;
+  cursor: not-allowed;
+}
+
 .ocr_page {
   padding: 24px;
   max-width: 1600px;

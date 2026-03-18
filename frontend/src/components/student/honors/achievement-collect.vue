@@ -363,7 +363,7 @@
                 <n-input v-model:value="paper_data.paper_title" placeholder="请输入完整论文题目" clearable />
               </n-form-item>
             </n-grid-item>
-            <n-grid-item v-if="paper_data.paper_title_cn">
+            <n-grid-item v-if="paper_data?.paper_title_cn">
               <n-form-item label="中文题目（AI翻译）">
                 <n-input v-model:value="paper_data.paper_title_cn" placeholder="英文论文自动翻译的中文题目" clearable />
               </n-form-item>
@@ -1126,6 +1126,11 @@ const handle_paper_ocr = async ({ file, onFinish, onError }: any) => {
     if (raw.authors_cn)       paper_data.value.authors_cn       = raw.authors_cn
     if (raw.first_author_cn)  paper_data.value.first_author_cn  = raw.first_author_cn
     if (raw.issuing_organization_cn) paper_data.value.issuing_organization_cn = raw.issuing_organization_cn
+    
+    // 同时也同步这些中文字段到 form_data，防止在非 paper 模板中提交丢失
+    if (raw.paper_title_cn) (form_data.value as any).paper_title_cn = raw.paper_title_cn
+    if (raw.journal_name_cn) (form_data.value as any).journal_name_cn = raw.journal_name_cn
+    if (raw.authors_cn) (form_data.value as any).authors_cn = raw.authors_cn
 
     if (raw.publish_date) {
       const d = new Date(raw.publish_date)
@@ -1186,6 +1191,11 @@ const handle_cert_ocr = async ({ file, onFinish, onError }: any) => {
       const d = new Date(dateStr)
       if (!isNaN(d.getTime())) form_data.value.date = d.getTime()
     }
+
+    // 🔥 证书类表单也需要同步翻译字段
+    if (raw.paper_title_cn) (form_data.value as any).paper_title_cn = raw.paper_title_cn
+    if (raw.journal_name_cn) (form_data.value as any).journal_name_cn = raw.journal_name_cn
+    if (raw.authors_cn) (form_data.value as any).authors_cn = raw.authors_cn
 
     if (certType === 'patent') {
       // 专利专属字段映射
@@ -1286,11 +1296,11 @@ const submit_paper_form = async () => {
         tutor_name: paper_data.value.tutor_name,
         attachment_urls: uploaded_urls,
         // 英文论文中文映射（用于中文搜索）
-        ...(paper_data.value.paper_title_cn ? { paper_title_cn: paper_data.value.paper_title_cn } : {}),
-        ...(paper_data.value.journal_name_cn ? { journal_name_cn: paper_data.value.journal_name_cn } : {}),
-        ...(paper_data.value.authors_cn?.length ? { authors_cn: paper_data.value.authors_cn } : {}),
-        ...(paper_data.value.first_author_cn ? { first_author_cn: paper_data.value.first_author_cn } : {}),
-        ...(paper_data.value.issuing_organization_cn ? { issuing_organization_cn: paper_data.value.issuing_organization_cn } : {})
+        paper_title_cn: paper_data.value.paper_title_cn,
+        journal_name_cn: paper_data.value.journal_name_cn,
+        authors_cn: paper_data.value.authors_cn,
+        first_author_cn: paper_data.value.first_author_cn,
+        issuing_organization_cn: paper_data.value.issuing_organization_cn
       },
       evidence_url: paper_data.value.evidence_url || uploaded_urls[0] || ''
     })
@@ -1632,7 +1642,12 @@ const submitAchievementForm = async () => {
           patent_number: form_data.value.patent_number,
           patent_inventors: form_data.value.patent_inventors,
           patent_holder: form_data.value.patent_holder,
-        } : {})
+        } : {}),
+        // 🔥 注入所有翻译字段（以 _cn 结尾，如果存在任何翻译字段也保存）
+        ...(Object.keys(form_data.value).reduce((acc: any, key: string) => {
+          if (key.endsWith('_cn')) acc[key] = (form_data.value as any)[key]
+          return acc
+        }, {}))
       }
     }
     
@@ -1757,6 +1772,7 @@ onMounted(() => {
       localStorage.removeItem('ocr_paper_data')
       const ocrData = JSON.parse(ocrPaperStr)
       collect_type.value = 'paper'
+      message.success('已自动为您填入论文识别信息')
 
       const publishStatusMap: Record<string, string> = {
         '已发表': 'published',

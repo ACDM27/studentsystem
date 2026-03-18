@@ -11,6 +11,7 @@ export interface Message {
     content: string
     timestamp: Date
     loading?: boolean
+    sessionId?: string | null // 消息所属的会话ID
 }
 
 export interface AiChatState {
@@ -174,20 +175,41 @@ const aiChatModule: Module<AiChatState, any> = {
                     localStorage.setItem(STORAGE_KEY_SESSION, state.sessionId)
                 }
 
-                // 保存消息（排除loading状态）
-                const messagesToSave = state.messages
+                // 获取已有的历史记录
+                const savedMessagesStr = localStorage.getItem(STORAGE_KEY_MESSAGES)
+                let allMessages: any[] = []
+                if (savedMessagesStr) {
+                    allMessages = JSON.parse(savedMessagesStr)
+                }
+
+                // 当前界面消息（排除loading状态）
+                const currentMessages = state.messages
                     .filter(msg => !msg.loading)
                     .map(msg => ({
                         ...msg,
                         timestamp: msg.timestamp.toISOString()
                     }))
-                localStorage.setItem(STORAGE_KEY_MESSAGES, JSON.stringify(messagesToSave))
 
-                /* 移除自动保存展开状态的逻辑 */
+                // 合并去重逻辑：根据消息ID合并，确保不丢失历史
+                // 如果 state.messages 为空（新对话），此逻辑将保留旧历史
+                const mergedMessages = [...allMessages]
+                currentMessages.forEach(newMsg => {
+                    const exists = mergedMessages.some(m => m.id === newMsg.id)
+                    if (!exists) {
+                        mergedMessages.push(newMsg)
+                    } else {
+                        // 如果已存在，更新内容（比如AI回复完成后的更新）
+                        const idx = mergedMessages.findIndex(m => m.id === newMsg.id)
+                        mergedMessages[idx] = newMsg
+                    }
+                })
+
+                localStorage.setItem(STORAGE_KEY_MESSAGES, JSON.stringify(mergedMessages))
 
                 console.log('[AI Chat Store] Saved:', {
                     sessionId: state.sessionId,
-                    messageCount: messagesToSave.length
+                    totalHistoryCount: mergedMessages.length,
+                    currentMessageCount: currentMessages.length
                 })
             } catch (error) {
                 console.error('[AI Chat Store] 保存状态失败:', error)
@@ -213,12 +235,57 @@ const aiChatModule: Module<AiChatState, any> = {
             }
         },
 
-        // 开启新对话（仅清空当前界面和Session，保留LocalStorage中的历史记录）
+        // 开启新对话（仅清空当前界面显示的消息，不清除本地历史记录存储）
         resetSession({ commit }) {
-            console.log('[AI Chat Store] Resetting session for new chat...')
-            commit('RESET_SESSION')
-            commit('CLEAR_MESSAGES')
-            // 不调用 localStorage.removeItem
+            console.log('[AI Chat Store] Resetting session for new chat (clearing UI, keeping history)...')
+            commit('SET_SESSION_ID', null)
+            commit('CLEAR_MESSAGES') // 清空 state.messages 以清空界面
+            // 明确不调用 localStorage.removeItem(STORAGE_KEY_MESSAGES)
+            // 也不调用 clearStorage，以便用户能在历史弹窗中查看过往对话
+        },
+
+        // 从历史记录中加载指定的消息及其上下文（同Session的消息）
+        loadConversationByMessage({ commit, dispatch }, messageId: string) {
+            console.log('[AI Chat Store] Loading conversation by messageId:', messageId)
+            
+            try {
+                const savedMessagesStr = localStorage.getItem(STORAGE_KEY_MESSAGES)
+                if (!savedMessagesStr) return
+
+                const allMessages: Message[] = JSON.parse(savedMessagesStr).map((msg: any) => ({
+                    ...msg,
+                    timestamp: new Date(msg.timestamp)
+                }))
+
+                const targetMsg = allMessages.find(m => m.id === messageId)
+                if (!targetMsg) {
+                    console.error('[AI Chat Store] 目标消息不存在')
+                    return
+                }
+
+                let conversation: Message[] = []
+                if (targetMsg.sessionId) {
+                    // 如果有SessionID，加载该Session的所有消息
+                    conversation = allMessages.filter(m => m.sessionId === targetMsg.sessionId)
+                    commit('SET_SESSION_ID', targetMsg.sessionId)
+                } else {
+                    // 如果没有SessionID（旧数据），则加载该消息及其紧邻的AI消息
+                    const idx = allMessages.findIndex(m => m.id === messageId)
+                    conversation = [targetMsg]
+                    if (idx + 1 < allMessages.length && allMessages[idx+1].type === 'ai') {
+                        conversation.push(allMessages[idx+1])
+                    }
+                    commit('SET_SESSION_ID', null)
+                }
+
+                // 按时间排序
+                conversation.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime())
+                
+                commit('SET_MESSAGES', conversation)
+                console.log('[AI Chat Store] Loaded conversation context:', conversation.length, 'messages')
+            } catch (error) {
+                console.error('[AI Chat Store] 加载历史对话失败:', error)
+            }
         },
 
         // 发送消息
@@ -258,17 +325,26 @@ const aiChatModule: Module<AiChatState, any> = {
                     session_id: state.sessionId
                 })
 
+                const newSessionId = response.session_id || state.sessionId
+
                 // 更新SessionID
                 if (response.session_id) {
                     commit('SET_SESSION_ID', response.session_id)
                 }
+
+                // 为新消息追加 SessionID 信息
+                commit('UPDATE_MESSAGE', {
+                    id: userMsg.id,
+                    updates: { sessionId: newSessionId }
+                })
 
                 // 更新AI消息
                 commit('UPDATE_MESSAGE', {
                     id: aiMsgId,
                     updates: {
                         content: response.message || '抱歉，暂时无法获取回复。',
-                        loading: false
+                        loading: false,
+                        sessionId: newSessionId
                     }
                 })
 

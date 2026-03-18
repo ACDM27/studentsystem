@@ -5,6 +5,9 @@ FROM node:20-alpine AS build-stage
 # 设置工作目录
 WORKDIR /app
 
+# 设置国内镜像源加速
+RUN npm config set registry https://registry.npmmirror.com
+
 # 复制依赖定义文件
 # 优化构建缓存：仅当 package.json 变更时才重新 npm install
 COPY package.json ./

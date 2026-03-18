@@ -37,12 +37,6 @@
                 <IconUser />
               </n-icon>
               <h3>欢迎使用AI学习助手</h3>
-              <p>我可以为您提供以下服务：</p>
-              <div class="service-tags">
-                <n-tag type="info" size="small">学习分析</n-tag>
-                <n-tag type="success" size="small">兴趣推荐</n-tag>
-                <n-tag type="warning" size="small">职业规划</n-tag>
-              </div>
             </div>
           </div>
 
@@ -186,6 +180,7 @@
               v-for="msg in filtered_history"
               :key="msg.id"
               class="history-item"
+              @click="selectHistoryItem(msg)"
             >
               <div class="history-item-content">
                 <div class="history-item-header">
@@ -267,8 +262,34 @@ const msg_container = ref<HTMLElement>()
 const show_history = ref(false)
 const search_keyword = ref('')
 const filtered_history = computed(() => {
+  // 核心逻辑更改：不仅看当前 state，还要看本地存储中所有已保存的历史
+  let allStoredMessages: any[] = []
+  try {
+    const saved = localStorage.getItem('ai_chat_messages')
+    if (saved) {
+      allStoredMessages = JSON.parse(saved)
+    }
+  } catch (e) {
+    console.error('解析历史记录失败', e)
+    allStoredMessages = store.state.aiChat.messages
+  }
+
+  // 合并当前内存中的消息和存储中的消息（去重）
+  const messagesFromStore = store.state.aiChat.messages
+  const uniqueMessages = [...allStoredMessages]
+  
+  messagesFromStore.forEach((msg: any) => {
+    if (!uniqueMessages.some(m => m.id === msg.id)) {
+      uniqueMessages.push(msg)
+    }
+  })
+
   // 仅显示用户的问题
-  const userMessages = store.state.aiChat.messages.filter((msg: any) => msg.type === 'user')
+  const userMessages = uniqueMessages
+    .filter((msg: any) => msg.type === 'user')
+    // 按时间倒序排列（最新的在最前）
+    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+
   if (!search_keyword.value.trim()) return userMessages
   return userMessages.filter((msg: any) => 
     msg.content.includes(search_keyword.value)
@@ -376,6 +397,21 @@ const handleEnterKey = (event: KeyboardEvent) => {
 const startNewChat = () => {
   store.dispatch('aiChat/resetSession')
   message.success('已开启新会话')
+}
+
+// 选择历史记录项并返回对话
+const selectHistoryItem = async (msg: any) => {
+  try {
+    await store.dispatch('aiChat/loadConversationByMessage', msg.id)
+    show_history.value = false
+    message.success('已加载该对话历史')
+    nextTick(() => {
+      scrollToBottom()
+    })
+  } catch (error) {
+    console.error('加载历史记录失败:', error)
+    message.error('加载历史记录失败')
+  }
 }
 
 // 清除历史
